@@ -1,4 +1,16 @@
+import { getStoreSettings } from "@/lib/catalog";
+export const dynamic = "force-dynamic";
 export const metadata = { title: "Privacy policy" };
 export default function PrivacyPage() {
-  return <main className="section wrap" style={{ maxWidth: 820 }}><span className="eyebrow">The important bits</span><h1 style={{ fontSize: 44 }}>Privacy policy</h1><p className="muted">We collect the information needed to manage your account, process purchases, deliver orders, and respond to enquiries. This may include your name, email address, phone number, delivery address, and order details.</p><h2>How we use your information</h2><p className="muted">We use order and contact information to fulfil your request, provide customer support, and maintain store records. Payment details are handled by Cashfree; we do not store card or UPI credentials.</p><h2>Sharing and storage</h2><p className="muted">We share only necessary information with service providers that support store hosting, database and image storage, payment processing, and delivery. Access is restricted to authorised store administrators.</p><h2>Your choices</h2><p className="muted">Contact us to request access, correction, or deletion of personal information, subject to records we are required to retain for legal or transaction purposes. This policy should be reviewed for your business and applicable Indian privacy requirements before launch.</p><p className="muted">Last updated: 14 November 2026</p></main>;
+  return <PrivacyContent />;
+}
+
+async function PrivacyContent() {
+  const settings = await getStoreSettings();
+  return <main className="section wrap" style={{ maxWidth: 820 }}><span className="eyebrow">The important bits</span><h1 style={{ fontSize: 44 }}>Privacy policy</h1>
+    <p className="muted">LILSURPRIZ respects your privacy. We collect your name, phone number, email address, and delivery address to process and deliver orders and respond to enquiries.</p>
+    <h2>How we use your information</h2><p className="muted">We use this information to manage your account, process and deliver orders, provide customer support, and respond to your enquiries. We do not sell customers’ personal information.</p>
+    <h2>Payments and protection</h2><p className="muted">Payments are handled securely by our payment provider. We do not store your card or UPI credentials. We take reasonable steps to protect customer information and limit access to authorised store administrators.</p>
+    <h2>Privacy questions</h2><p className="muted">For privacy questions, contact <a className="text-link" href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a>.</p>
+  </main>;
 }

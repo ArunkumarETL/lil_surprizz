@@ -1,4 +1,16 @@
+import { getStoreSettings } from "@/lib/catalog";
+export const dynamic = "force-dynamic";
 export const metadata = { title: "Refund and cancellation policy" };
 export default function RefundsPage() {
-  return <main className="section wrap" style={{ maxWidth: 820 }}><span className="eyebrow">Here if something goes wrong</span><h1 style={{ fontSize: 44 }}>Refunds & cancellations</h1><p className="muted">If you need to cancel or change an order, contact us as soon as possible with your order number. Requests are handled based on the order’s fulfilment stage; personalised or already-dispatched items may not be cancellable.</p><h2>Damaged or incorrect items</h2><p className="muted">Please contact us promptly with your order number and clear photographs of the issue so we can review and help with an appropriate resolution.</p><h2>Refunds</h2><p className="muted">Where a refund is approved, it will be issued to the original payment method through the payment provider. Processing time depends on the provider and your bank.</p><p className="notice">Please customise this policy to reflect your actual returns process and applicable consumer-protection requirements before accepting orders.</p><p className="muted">Last updated: 14 November 2026</p></main>;
+  return <RefundPolicy />;
+}
+
+async function RefundPolicy() {
+  const settings = await getStoreSettings();
+  const phone = settings.whatsapp_number.replace(/\D/g, "");
+  return <main className="section wrap" style={{ maxWidth: 820 }}><span className="eyebrow">Here if something goes wrong</span><h1 style={{ fontSize: 44 }}>Refund & return policy</h1>
+    <ul className="muted"><li>Orders generally cannot be cancelled once confirmed.</li><li>Customised hampers cannot be cancelled once preparation begins.</li><li>Report damaged or incorrect products within 48 hours of delivery.</li><li>Report missing items within 48 hours of delivery.</li><li>Change-of-mind returns are not accepted for correctly delivered products.</li></ul>
+    <h2>Refunds</h2><p className="muted">Eligible refunds will generally be initiated within 5–7 business days after approval. Refunds will be processed through the original payment method wherever possible.</p>
+    <h2>Refund assistance</h2><p className="muted">Email: <a className="text-link" href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a><br />WhatsApp: <a className="text-link" href={`https://wa.me/${phone}`} target="_blank" rel="noreferrer">{settings.whatsapp_number}</a></p>
+  </main>;
 }

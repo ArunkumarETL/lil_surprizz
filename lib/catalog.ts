@@ -35,8 +35,10 @@ export async function getStoreSettings(): Promise<StoreSettings> {
   return {
     brand_name: data?.brand_name ?? "LILSURPRIZ",
     logo_url: data?.logo_url ?? null,
-    whatsapp_number: data?.whatsapp_number ?? process.env.WHATSAPP_NUMBER ?? "",
-    contact_email: data?.contact_email ?? "",
+    business_phone: data?.business_phone ?? "9585664547",
+    business_address: data?.business_address ?? "41/A Rajiv Gandhi street, Pallikaranai, Chennai",
+    whatsapp_number: data?.whatsapp_number ?? process.env.WHATSAPP_NUMBER ?? "9585664547",
+    contact_email: data?.contact_email ?? "lilsurpriz@gmail.com",
     instagram_url: data?.instagram_url ?? "",
     shipping_charge: Number(data?.shipping_charge ?? 60),
     free_shipping_threshold: Number(data?.free_shipping_threshold ?? 999),

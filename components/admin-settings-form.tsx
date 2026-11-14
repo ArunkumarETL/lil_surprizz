@@ -37,12 +37,14 @@ export function AdminSettingsForm({ settings }: { settings: StoreSettings }) {
   }
   return <form className="form" onSubmit={save}><div className="form-grid">
     <div className="field"><label>Brand name</label><input required value={form.brand_name} onChange={e => setForm({ ...form, brand_name: e.target.value })} /></div>
+    <div className="field"><label>Business phone</label><input value={form.business_phone} onChange={e => setForm({ ...form, business_phone: e.target.value })} /></div>
     <div className="field"><label>Business WhatsApp (country code + number)</label><input placeholder="919876543210" value={form.whatsapp_number} onChange={e => setForm({ ...form, whatsapp_number: e.target.value })} /></div>
     <div className="field"><label>Contact email</label><input type="email" value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} /></div>
     <div className="field"><label>Instagram URL</label><input type="url" value={form.instagram_url} onChange={e => setForm({ ...form, instagram_url: e.target.value })} /></div>
     <div className="field"><label>Shipping charge (₹)</label><input type="number" min="0" step=".01" value={form.shipping_charge} onChange={e => setForm({ ...form, shipping_charge: Number(e.target.value) })} /></div>
     <div className="field"><label>Free shipping threshold (₹)</label><input type="number" min="0" step=".01" value={form.free_shipping_threshold} onChange={e => setForm({ ...form, free_shipping_threshold: Number(e.target.value) })} /></div>
   </div>
+  <div className="field"><label>Business address</label><textarea maxLength={500} value={form.business_address} onChange={e => setForm({ ...form, business_address: e.target.value })} /></div>
   <div className="field"><label>Store announcement</label><input maxLength={300} value={form.announcement} onChange={e => setForm({ ...form, announcement: e.target.value })} /></div>
   <div className="field"><label>Logo image</label><input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onChange={e => uploadLogo(e.target.files?.[0])} />{form.logo_url && <img src={form.logo_url} alt="Current store logo" style={{ maxWidth: 180, maxHeight: 65, objectFit: "contain" }} />}</div>
   <div className="form-grid"><div className="field"><label>Facebook URL</label><input type="url" value={form.social_links.facebook ?? ""} onChange={e => setForm({ ...form, social_links: { ...form.social_links, facebook: e.target.value } })} /></div><div className="field"><label>YouTube URL</label><input type="url" value={form.social_links.youtube ?? ""} onChange={e => setForm({ ...form, social_links: { ...form.social_links, youtube: e.target.value } })} /></div></div>

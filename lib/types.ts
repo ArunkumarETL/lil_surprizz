@@ -35,6 +35,8 @@ export type Product = {
 export type StoreSettings = {
   brand_name: string;
   logo_url: string | null;
+  business_phone: string;
+  business_address: string;
   whatsapp_number: string;
   contact_email: string;
   instagram_url: string;
