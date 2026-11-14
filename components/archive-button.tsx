@@ -3,11 +3,13 @@ import { useState } from "react";
 export function ArchiveButton({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   async function archive() {
-    if (!window.confirm("Archive this product? It will disappear from the shop, but existing orders will be kept.")) return;
+    if (!window.confirm("Permanently delete this product? It will be removed from the shop and product list. Past order records will remain. This cannot be undone.")) return;
     setBusy(true);
     const response = await fetch(`/api/admin/products?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (!response.ok) { const result = await response.json() as { error?: string }; window.alert(result.error ?? "Unable to archive product."); setBusy(false); return; }
+    const result = await response.json() as { error?: string; warning?: string };
+    if (!response.ok) { window.alert(result.error ?? "Unable to delete product."); setBusy(false); return; }
+    if (result.warning) window.alert(result.warning);
     window.location.reload();
   }
-  return <button disabled={busy} onClick={archive} style={{ border: 0, background: "none", color: "var(--pink-dark)", marginLeft: 8 }}>{busy ? "Archiving…" : "Archive"}</button>;
+  return <button disabled={busy} onClick={archive} style={{ border: 0, background: "none", color: "#b42318", marginLeft: 8 }}>{busy ? "Deleting…" : "Delete permanently"}</button>;
 }

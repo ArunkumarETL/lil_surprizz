@@ -67,7 +67,29 @@ export async function DELETE(request: Request) {
   const auth = await requireAdmin(); if ("response" in auth) return auth.response;
   const id = new URL(request.url).searchParams.get("id");
   if (!id || !z.string().uuid().safeParse(id).success) return Response.json({ error: "Invalid product ID." }, { status: 400 });
-  const { error } = await createAdminClient().from("products").update({ archived: true, available: false, updated_at: new Date().toISOString() }).eq("id", id);
-  if (error) return Response.json({ error: "Unable to archive product." }, { status: 500 });
-  return Response.json({ archived: true });
+  const db = createAdminClient();
+  const { data: images, error: imageReadError } = await db.from("product_images").select("image_url").eq("product_id", id);
+  if (imageReadError) return Response.json({ error: "Unable to load product images before deletion." }, { status: 500 });
+
+  const { error } = await db.from("products").delete().eq("id", id);
+  if (error) return Response.json({ error: "Unable to permanently delete product." }, { status: 500 });
+
+  const objectPaths = (images ?? []).flatMap(({ image_url }) => {
+    try {
+      const url = new URL(image_url);
+      const prefix = "/storage/v1/object/public/product-images/";
+      if (!url.pathname.startsWith(prefix)) return [];
+      return [decodeURIComponent(url.pathname.slice(prefix.length))];
+    } catch {
+      return [];
+    }
+  });
+  if (objectPaths.length) {
+    const { error: storageError } = await db.storage.from("product-images").remove(objectPaths);
+    if (storageError) {
+      console.error("Product deleted, but image cleanup failed", id, storageError.message);
+      return Response.json({ deleted: true, warning: "Product was deleted, but one or more stored images could not be removed." });
+    }
+  }
+  return Response.json({ deleted: true });
 }
