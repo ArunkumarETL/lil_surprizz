@@ -6,6 +6,8 @@ const schema = z.object({
   brand_name: z.string().trim().min(2).max(100), logo_url: z.string().url().nullable(),
   business_phone: z.string().trim().max(30), business_address: z.string().trim().max(500),
   whatsapp_number: z.string().trim().max(20), contact_email: z.string().email().or(z.literal("")),
+  upi_id: z.string().trim().max(100).refine(value => !value || /^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/.test(value), "Enter a valid UPI ID."),
+  upi_qr_url: z.string().url().nullable(),
   instagram_url: z.string().url().or(z.literal("")), shipping_charge: z.number().nonnegative().max(100000),
   free_shipping_threshold: z.number().nonnegative().max(10000000), announcement: z.string().max(300),
   social_links: z.record(z.string(), z.string().url().or(z.literal(""))),

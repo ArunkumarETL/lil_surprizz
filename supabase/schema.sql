@@ -88,7 +88,10 @@ create table if not exists public.orders (
   currency text not null default 'INR',
   order_status text not null default 'Pending' check (order_status in ('Pending','Paid','Processing','Packed','Shipped','Delivered','Cancelled')),
   payment_status text not null default 'pending' check (payment_status in ('pending','paid','failed','refunded')),
+  payment_method text not null default 'cashfree' check (payment_method in ('cashfree','manual_upi')),
   payment_reference text,
+  payment_claim_reference text,
+  payment_details jsonb,
   cashfree_order_id text unique,
   tracking_number text,
   shipping_address jsonb not null default '{}',
@@ -99,6 +102,8 @@ create table if not exists public.orders (
 );
 create index if not exists orders_customer_idx on public.orders(customer_id, created_at desc);
 create index if not exists orders_status_idx on public.orders(order_status);
+create unique index if not exists orders_payment_claim_reference_unique on public.orders(payment_claim_reference) where payment_claim_reference is not null;
+create unique index if not exists orders_manual_payment_reference_unique on public.orders(payment_reference) where payment_method = 'manual_upi' and payment_reference is not null;
 
 create table if not exists public.order_items (
   id uuid primary key default gen_random_uuid(),
@@ -147,6 +152,8 @@ create table if not exists public.store_settings (
   instagram_url text not null default '',
   shipping_charge numeric(10,2) not null default 60,
   free_shipping_threshold numeric(10,2) not null default 999,
+  upi_id text not null default '',
+  upi_qr_url text,
   announcement text not null default 'Little gifts, big surprises.',
   social_links jsonb not null default '{}',
   updated_at timestamptz not null default now()

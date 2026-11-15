@@ -5,11 +5,12 @@ import Link from "next/link";
 import { useCart } from "@/components/store-provider";
 
 export default function CheckoutPage() {
-  const { items } = useCart();
+  const { items, clear } = useCart();
   const [form, setForm] = useState({ name: "", phone: "", address: "", city: "", state: "", pincode: "" });
   const [coupon, setCoupon] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null);
   const [delivery, setDelivery] = useState({ shipping_charge: 60, free_shipping_threshold: 999 });
+  const [upiStatus, setUpiStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [customization, setCustomization] = useState<Record<string, unknown> | undefined>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -18,10 +19,11 @@ export default function CheckoutPage() {
   const estimatedTotal = Math.max(0, subtotal - (appliedCoupon?.discount ?? 0)) + shipping;
   useEffect(() => {
     fetch("/api/settings", { cache: "no-store" }).then(async response => {
-      if (!response.ok) return;
-      const settings = await response.json() as { shipping_charge: number; free_shipping_threshold: number };
+      if (!response.ok) throw new Error("Unable to load payment settings.");
+      const settings = await response.json() as { shipping_charge: number; free_shipping_threshold: number; upi_id?: string };
       setDelivery(settings);
-    }).catch(() => undefined);
+      setUpiStatus(settings.upi_id ? "ready" : "unavailable");
+    }).catch(() => setUpiStatus("unavailable"));
   }, []);
   useEffect(() => {
     const saved = localStorage.getItem("lilsurpriz-customization");
@@ -34,10 +36,12 @@ export default function CheckoutPage() {
     event.preventDefault(); setBusy(true); setError("");
     try {
       const response = await fetch("/api/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: items.map(i => ({ productId: i.product.id, quantity: i.quantity })), ...form, coupon: coupon || undefined, customization }) });
-      const result = await response.json() as { checkoutUrl?: string; error?: string };
-      if (!response.ok || !result.checkoutUrl) throw new Error(result.error ?? "Unable to start secure checkout.");
+      const result = await response.json() as { manualPaymentUrl?: string; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Unable to start checkout.");
+      if (!result.manualPaymentUrl) throw new Error(result.error ?? "Unable to start UPI payment.");
+      clear();
       localStorage.removeItem("lilsurpriz-customization");
-      window.location.assign(result.checkoutUrl);
+      window.location.assign(result.manualPaymentUrl);
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to start checkout."); setBusy(false); }
   }
   async function applyCoupon() {
@@ -55,7 +59,9 @@ export default function CheckoutPage() {
       <div className="form-grid"><div className="field"><label>City</label><input required value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} /></div><div className="field"><label>State</label><input required value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} /></div></div>
       <div className="field"><label>PIN code</label><input required inputMode="numeric" pattern="[0-9]{6}" value={form.pincode} onChange={e => setForm({ ...form, pincode: e.target.value })} /></div>
       <div className="field"><label>Coupon code (optional)</label><div style={{ display: "flex", gap: 8 }}><input value={coupon} onChange={e => { setCoupon(e.target.value.toUpperCase()); setAppliedCoupon(null); }} /><button type="button" className="btn btn-light" onClick={applyCoupon}>Apply</button></div>{appliedCoupon && <small className="muted">{appliedCoupon.code} applied.</small>}</div>
-      {error && <div className="notice" role="alert">{error}</div>}<button className="btn btn-pink" disabled={busy}>{busy ? "Creating secure payment…" : "Continue to Cashfree"}</button><p className="muted">You’ll be redirected to Cashfree’s secure hosted checkout.</p>
+      <div className="summary"><h2 style={{ fontSize: 20 }}>Pay with Google Pay or another UPI app</h2><p className="muted">You’ll pay in your UPI app and submit the transaction reference. Your order stays pending until the store verifies the payment.</p></div>
+      {upiStatus === "unavailable" && <div className="notice" role="alert">UPI payments are not available right now. Please contact the store.</div>}
+      {error && <div className="notice" role="alert">{error}</div>}<button className="btn btn-pink" disabled={busy || upiStatus !== "ready"}>{busy ? "Creating order…" : upiStatus === "loading" ? "Loading payment options…" : "Continue to UPI payment"}</button>
     </form><div className="summary"><h2 style={{ fontSize: 24 }}>Your order</h2>{items.map(i => <div key={i.product.id} className="summary-line"><span>{i.product.name} × {i.quantity}</span><b>₹{(i.product.price * i.quantity).toLocaleString("en-IN")}</b></div>)}<div className="summary-line"><span>Subtotal</span><b>₹{subtotal.toLocaleString("en-IN")}</b></div>{appliedCoupon && <div className="summary-line"><span>Discount ({appliedCoupon.code})</span><b>− ₹{appliedCoupon.discount.toLocaleString("en-IN")}</b></div>}<div className="summary-line"><span>Delivery</span><b>{shipping ? `₹${shipping.toLocaleString("en-IN")}` : "Free"}</b></div><div className="summary-line total"><span>Estimated total</span><b>₹{estimatedTotal.toLocaleString("en-IN")}</b></div></div></div>
   </main>;
 }
