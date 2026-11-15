@@ -34,7 +34,12 @@ export function SiteHeader() {
     <div className="announcement">{announcement}</div>
     <header className="header"><nav className="nav">
       <button className="mobile-menu" aria-label="Toggle navigation" onClick={() => setOpen(!open)}>☰</button>
-      <Link className="logo" href="/">{logo ? <img src={logo} alt={brand} style={{ maxHeight: 40, maxWidth: 155, objectFit: "contain" }} /> : brand}</Link>
+      <Link className="logo" href="/">
+        {logo ? <img src={logo} alt={brand} style={{ maxHeight: 40, maxWidth: 155, objectFit: "contain" }} /> : <>
+          <span className="brand-symbol"><img src="/brand/lilsurpriz-emblem.png" alt="" /></span>
+          {brand}
+        </>}
+      </Link>
       <div className="navlinks">{links.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}</div>
       <div className="navactions">{isAdmin && <Link href="/admin">Admin</Link>}<Link href="/account">Account</Link><Link href="/cart" aria-label={`Cart, ${count} items`}>Bag ({count})</Link></div>
       {open && <div className="mobile-nav">{links.map(([label, href]) => <Link onClick={() => setOpen(false)} key={href} href={href}>{label}</Link>)}{isAdmin && <Link onClick={() => setOpen(false)} href="/admin">Admin dashboard</Link>}</div>}

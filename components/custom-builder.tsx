@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Product } from "@/lib/types";
 import { useCart } from "@/components/store-provider";
+import { normalizeWhatsAppNumber } from "@/lib/whatsapp";
 
 const colours = ["Blush pink", "Lavender", "Cream", "Surprise me"];
 const occasions = ["Birthday", "Bestie surprise", "Thank you", "Just because", "Self care"];
@@ -24,7 +25,18 @@ export function CustomBuilder({ products, whatsapp }: { products: Product[]; wha
 
   async function saveAndContinue(channel: "whatsapp" | "online") {
     if (!selected.length || !recipient.trim()) { setMessage("Choose at least one gift and add the recipient’s name."); return; }
+    const whatsappNumber = normalizeWhatsAppNumber(whatsapp);
+    if (channel === "whatsapp" && !whatsappNumber) { setMessage("The store has not added a valid WhatsApp number yet. Please use Contact Us."); return; }
     setMessage("");
+    let whatsappWindow: Window | null = null;
+    let whatsappUrl = "";
+    if (channel === "whatsapp") {
+      const lines = selected.map(p => `• ${p.name} × ${quantities[p.id]} — ₹${(p.price * quantities[p.id]).toLocaleString("en-IN")}`).join("\n");
+      const text = `Hi LILSURPRIZ! I'd love a custom hamper.\nRecipient: ${recipient}\nOccasion: ${occasion}\nBox: ${colour}\nItems:\n${lines}\nMessage: ${note || "None"}\nInstructions: ${instructions || "None"}\nEstimated total: ₹${total.toLocaleString("en-IN")}`;
+      whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`;
+      whatsappWindow = window.open("about:blank", "_blank");
+      if (whatsappWindow) whatsappWindow.opener = null;
+    }
     try {
       const response = await fetch("/api/custom-enquiries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(details) });
       if (!response.ok) {
@@ -32,16 +44,17 @@ export function CustomBuilder({ products, whatsapp }: { products: Product[]; wha
         throw new Error(result.error ?? "Could not save your hamper request.");
       }
       if (channel === "whatsapp") {
-        if (!whatsapp) throw new Error("The store has not added its WhatsApp number yet. Please use Contact Us.");
-        const lines = selected.map(p => `• ${p.name} × ${quantities[p.id]} — ₹${(p.price * quantities[p.id]).toLocaleString("en-IN")}`).join("\n");
-        const text = `Hi LILSURPRIZ! I'd love a custom hamper.\nRecipient: ${recipient}\nOccasion: ${occasion}\nBox: ${colour}\nItems:\n${lines}\nMessage: ${note || "None"}\nInstructions: ${instructions || "None"}\nEstimated total: ₹${total.toLocaleString("en-IN")}`;
-        window.open(`https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+        if (whatsappWindow && !whatsappWindow.closed) whatsappWindow.location.href = whatsappUrl;
+        else window.location.assign(whatsappUrl);
       } else {
         selected.forEach(product => add(product, quantities[product.id]));
         localStorage.setItem("lilsurpriz-customization", JSON.stringify(details));
         router.push("/checkout");
       }
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Something went wrong."); }
+    } catch (error) {
+      whatsappWindow?.close();
+      setMessage(error instanceof Error ? error.message : "Something went wrong.");
+    }
   }
 
   return <div className="split"><div><h2 style={{ fontSize: 24 }}>Pick their little joys</h2>{products.length ? products.map(product => <label key={product.id} className="cart-row" style={{ gridTemplateColumns: "1fr auto", cursor: "pointer" }}>

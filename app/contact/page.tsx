@@ -1,9 +1,10 @@
 import { getStoreSettings } from "@/lib/catalog";
+import { normalizeWhatsAppNumber } from "@/lib/whatsapp";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Contact us", description: "Contact the LILSURPRIZ gifting team." };
 export default async function ContactPage() {
   const settings = await getStoreSettings();
-  const whatsapp = settings.whatsapp_number.replace(/\D/g, "");
+  const whatsapp = normalizeWhatsAppNumber(settings.whatsapp_number);
   return <main className="section wrap" style={{ maxWidth: 720 }}><span className="eyebrow">We’re happy to help</span><h1 style={{ fontSize: 46 }}>Let’s talk gifts.</h1><p className="muted">Questions about an order, a custom hamper, or just need a little help picking a gift? Get in touch.</p><div className="summary form">
     <p><b>Business</b><br />{settings.brand_name}</p>
     <p><b>Email</b><br /><a className="text-link" href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a></p>
