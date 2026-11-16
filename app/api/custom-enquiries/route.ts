@@ -17,6 +17,15 @@ export async function POST(request: Request) {
   const body = schema.safeParse(await request.json().catch(() => null));
   if (!body.success) return Response.json({ error: "Please add a recipient and at least one gift item." }, { status: 400 });
   const admin = createAdminClient();
+  if (body.data.colour !== "Surprise me") {
+    const { data: colour, error: colourError } = await admin.from("box_colours")
+      .select("id")
+      .eq("name", body.data.colour)
+      .eq("active", true)
+      .maybeSingle();
+    if (colourError) return Response.json({ error: "Could not validate the selected box colour." }, { status: 500 });
+    if (!colour) return Response.json({ error: "That box colour is no longer available. Please choose another." }, { status: 400 });
+  }
   const ids = [...new Set(body.data.items.map(item => item.productId))];
   const { data: products, error } = await admin.from("products").select("id,name,price,stock,available,archived").in("id", ids);
   if (error) return Response.json({ error: "Could not validate hamper items." }, { status: 500 });

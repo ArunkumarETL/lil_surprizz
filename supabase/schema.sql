@@ -9,6 +9,19 @@ create table if not exists public.categories (
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
+create table if not exists public.box_colours (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  active boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+insert into public.box_colours (name, sort_order) values
+  ('Blush pink', 10),
+  ('Lavender', 20),
+  ('Cream', 30)
+on conflict (name) do nothing;
 insert into public.categories (name, slug, description) values
   ('Girls Collection', 'girls', 'Thoughtful little gifts for the girls.'),
   ('Boys Collection', 'boys', 'Fun surprises, thoughtfully picked.'),
@@ -165,6 +178,7 @@ returns boolean language sql stable security invoker
 as $$ select coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin' $$;
 
 alter table public.categories enable row level security;
+alter table public.box_colours enable row level security;
 alter table public.products enable row level security;
 alter table public.product_images enable row level security;
 alter table public.customers enable row level security;
@@ -176,6 +190,8 @@ alter table public.store_settings enable row level security;
 
 create policy "Public can view active categories" on public.categories for select using (active or public.is_admin());
 create policy "Admins manage categories" on public.categories for all using (public.is_admin()) with check (public.is_admin());
+create policy "Public can view active box colours" on public.box_colours for select using (active or public.is_admin());
+create policy "Admins manage box colours" on public.box_colours for all using (public.is_admin()) with check (public.is_admin());
 create policy "Public can view active products" on public.products for select using ((available and not archived) or public.is_admin());
 create policy "Admins manage products" on public.products for all using (public.is_admin()) with check (public.is_admin());
 create policy "Public can view product images" on public.product_images for select using (

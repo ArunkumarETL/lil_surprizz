@@ -6,14 +6,14 @@ import type { Product } from "@/lib/types";
 import { useCart } from "@/components/store-provider";
 import { normalizeWhatsAppNumber } from "@/lib/whatsapp";
 
-const colours = ["Blush pink", "Lavender", "Cream", "Surprise me"];
+const surpriseMe = "Surprise me";
 const occasions = ["Birthday", "Bestie surprise", "Thank you", "Just because", "Self care"];
 
-export function CustomBuilder({ products, whatsapp }: { products: Product[]; whatsapp: string }) {
+export function CustomBuilder({ products, whatsapp, colours }: { products: Product[]; whatsapp: string; colours: string[] }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [recipient, setRecipient] = useState("");
   const [occasion, setOccasion] = useState(occasions[0]);
-  const [colour, setColour] = useState(colours[0]);
+  const [colour, setColour] = useState(colours[0] ?? surpriseMe);
   const [note, setNote] = useState("");
   const [instructions, setInstructions] = useState("");
   const [message, setMessage] = useState("");
@@ -64,7 +64,7 @@ export function CustomBuilder({ products, whatsapp }: { products: Product[]; wha
     </div><div className="summary"><h2 style={{ fontSize: 24 }}>Make it theirs</h2><div className="form">
       <div className="field"><label>Recipient name</label><input value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Who’s the surprise for?" /></div>
       <div className="field"><label>Occasion</label><select value={occasion} onChange={e => setOccasion(e.target.value)}>{occasions.map(o => <option key={o}>{o}</option>)}</select></div>
-      <div className="field"><label>Box colour</label><select value={colour} onChange={e => setColour(e.target.value)}>{colours.map(c => <option key={c}>{c}</option>)}</select></div>
+      <div className="field"><label>Box colour</label><select value={colour} onChange={e => setColour(e.target.value)}>{colours.map(c => <option key={c}>{c}</option>)}<option>{surpriseMe}</option></select></div>
       <div className="field"><label>Personal message</label><textarea maxLength={500} value={note} onChange={e => setNote(e.target.value)} placeholder="A little note to make them smile…" /></div>
       <div className="field"><label>Special instructions</label><textarea maxLength={1000} value={instructions} onChange={e => setInstructions(e.target.value)} /></div>
       <div className="summary-line total"><span>Estimated gift total</span><b>₹{total.toLocaleString("en-IN")}</b></div>

@@ -7,6 +7,13 @@ export type Category = {
   active: boolean;
 };
 
+export type BoxColour = {
+  id: string;
+  name: string;
+  active: boolean;
+  sort_order: number;
+};
+
 export type ProductImage = { id: string; image_url: string; alt_text: string | null; position: number };
 
 export type Product = {
