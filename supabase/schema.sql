@@ -79,7 +79,7 @@ for each row execute function public.create_customer_profile();
 
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
-  customer_id uuid not null references public.customers(id),
+  customer_id uuid references public.customers(id),
   order_number text not null unique,
   subtotal numeric(10,2) not null check (subtotal >= 0),
   shipping_charge numeric(10,2) not null default 0 check (shipping_charge >= 0),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createGuestOrderAccessToken } from "@/lib/guest-order-access";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -20,7 +21,6 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "Please check your delivery details and items." }, { status: 400 });
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: "Please sign in before checkout." }, { status: 401 });
 
   const admin = createAdminClient();
   const requested = parsed.data.items;
@@ -59,14 +59,17 @@ export async function POST(request: Request) {
   }
   const shipping = subtotal - discount >= Number(settings?.free_shipping_threshold ?? 999) ? 0 : Number(settings?.shipping_charge ?? 60);
   const total = Math.round((subtotal - discount + shipping) * 100) / 100;
-  const { error: customerError } = await admin.from("customers").upsert({ id: user.id, full_name: parsed.data.name, email: user.email ?? null, phone: parsed.data.phone });
-  if (customerError) return Response.json({ error: "Unable to save customer details." }, { status: 500 });
+  if (user) {
+    const { error: customerError } = await admin.from("customers").upsert({ id: user.id, full_name: parsed.data.name, email: user.email ?? null, phone: parsed.data.phone });
+    if (customerError) return Response.json({ error: "Unable to save customer details." }, { status: 500 });
+  }
 
   const orderNumber = `LS-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
+  const guestAccess = user ? null : createGuestOrderAccessToken();
   const { data: order, error: orderError } = await admin.from("orders").insert({
-    customer_id: user.id, order_number: orderNumber, subtotal, shipping_charge: shipping, discount, total,
+    customer_id: user?.id ?? null, order_number: orderNumber, subtotal, shipping_charge: shipping, discount, total,
     coupon_code: couponCode, cashfree_order_id: null, payment_method: "manual_upi",
-    payment_details: { upi_id: upiId, qr_url: settings?.upi_qr_url ?? null },
+    payment_details: { upi_id: upiId, qr_url: settings?.upi_qr_url ?? null, ...(guestAccess ? { guest_access_token_hash: guestAccess.tokenHash } : {}) },
     shipping_address: { name: parsed.data.name, phone: parsed.data.phone, address: parsed.data.address, city: parsed.data.city, state: parsed.data.state, pincode: parsed.data.pincode },
     custom_details: parsed.data.customization ?? null,
   }).select("id").single();
@@ -77,5 +80,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Unable to save your order items." }, { status: 500 });
   }
 
-  return Response.json({ manualPaymentUrl: `/payment/manual?order_id=${encodeURIComponent(order.id)}`, orderNumber });
+  const accessFragment = guestAccess ? `#access_token=${guestAccess.token}` : "";
+  return Response.json({ manualPaymentUrl: `/payment/manual?order_id=${encodeURIComponent(order.id)}${accessFragment}`, orderNumber });
 }
