@@ -14,7 +14,7 @@ Mobile-first ecommerce application built with Next.js and Supabase.
 
 - Product, category, stock, price, image, and settings management is backed by Supabase.
 - Product and logo images are stored in the `product-images` Storage bucket. Product images are resized to a 1600px maximum dimension and WebP-encoded in the browser.
-- Orders are re-priced and stock-checked on the server. Customers can check out as guests with delivery details, without signing in. Checkout uses manual UPI only. Configure the UPI ID and upload the merchant QR in `/admin/settings`; customer-submitted UTRs stay unverified until an admin checks GPay and confirms the payment in `/admin/orders`.
+- Orders are re-priced and stock-checked on the server. Customers can check out as guests with delivery details, without signing in. Checkout uses manual UPI only. Configure the UPI ID and upload the merchant QR in `/admin/settings`; customers include the order note shown at payment so the store can match payments in GPay and confirm orders in `/admin/orders`.
 - Existing Cashfree orders can still be reconciled through the payment webhook; Cashfree is no longer offered for new checkout orders.
 - Customers may sign in to view account features, but checkout does not require an account. Guest payment links use unguessable, single-order access tokens. Admin checks use the trusted JWT `app_metadata.role` claim and are repeated for each admin API request.
 - WhatsApp hamper submissions are saved as enquiries and are never treated as paid orders.
@@ -28,6 +28,6 @@ Mobile-first ecommerce application built with Next.js and Supabase.
 - Set `NEXT_PUBLIC_SITE_URL` to the canonical HTTPS deployment URL.
 - Review legal policies, shipping charges, delivery estimates, and refund terms for the actual business.
 - Create active categories and products in `/admin`; no seeded or hard-coded product catalogue is used.
-- Test account confirmation, admin access, image upload, stock validation, manual UPI reference submission and admin verification, order fulfilment, WhatsApp deep-links, and mobile layouts against the configured services.
+- Test account confirmation, admin access, image upload, stock validation, manual UPI order-note matching and admin verification, order fulfilment, WhatsApp deep-links, and mobile layouts against the configured services.
 
 `npm run build` and `npm run typecheck` validate the app source. A live payment, authenticated admin workflow, or Storage upload cannot be truthfully integration-tested until project credentials are supplied.
