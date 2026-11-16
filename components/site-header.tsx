@@ -35,7 +35,7 @@ export function SiteHeader() {
     <header className="header"><nav className="nav">
       <button className="mobile-menu" aria-label="Toggle navigation" onClick={() => setOpen(!open)}>☰</button>
       <Link className="logo" href="/">
-        {logo ? <img src={logo} alt={brand} style={{ maxHeight: 40, maxWidth: 155, objectFit: "contain" }} /> : <>
+        {logo ? <><img src={logo} alt={brand} style={{ maxHeight: 40, maxWidth: 155, objectFit: "contain" }} /><span className="logo-wordmark">{brand}</span></> : <>
           <span className="brand-symbol"><img src="/brand/lilsurpriz-emblem.png" alt="" /></span>
           {brand}
         </>}
