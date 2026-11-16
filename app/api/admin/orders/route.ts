@@ -13,6 +13,14 @@ export async function PATCH(request: Request) {
   if (readError || !order) return Response.json({ error: "Order not found." }, { status: 404 });
   if (parsed.data.order_status === "Pending" && (order.payment_status !== "pending" || order.order_status !== "Pending")) return Response.json({ error: "Only an unpaid order can remain pending." }, { status: 409 });
   if (!["Cancelled", "Pending"].includes(parsed.data.order_status) && order.payment_status !== "paid") return Response.json({ error: "Only a verified paid order can move to fulfilment." }, { status: 409 });
+  if (parsed.data.order_status === "Cancelled") {
+    const { error } = await db.rpc("cancel_order_and_release_stock", {
+      p_order_id: parsed.data.id,
+      p_tracking_number: parsed.data.tracking_number,
+    });
+    if (error) return Response.json({ error: "Unable to cancel order and release its stock." }, { status: 500 });
+    return Response.json({ saved: true });
+  }
   const { error } = await db.from("orders").update({ order_status: parsed.data.order_status, tracking_number: parsed.data.tracking_number, updated_at: new Date().toISOString() }).eq("id", parsed.data.id);
   if (error) return Response.json({ error: "Unable to update order." }, { status: 500 });
   return Response.json({ saved: true });

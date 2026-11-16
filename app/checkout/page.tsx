@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useCart } from "@/components/store-provider";
+import { rememberGuestOrder } from "@/lib/guest-order-storage";
 
 export default function CheckoutPage() {
   const { items, clear } = useCart();
@@ -36,9 +37,19 @@ export default function CheckoutPage() {
     event.preventDefault(); setBusy(true); setError("");
     try {
       const response = await fetch("/api/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: items.map(i => ({ productId: i.product.id, quantity: i.quantity })), ...form, coupon: coupon || undefined, customization }) });
-      const result = await response.json() as { manualPaymentUrl?: string; error?: string };
+      const result = await response.json() as { manualPaymentUrl?: string; orderNumber?: string; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Unable to start checkout.");
       if (!result.manualPaymentUrl) throw new Error(result.error ?? "Unable to start UPI payment.");
+      const paymentUrl = new URL(result.manualPaymentUrl, window.location.origin);
+      const orderId = paymentUrl.searchParams.get("order_id");
+      const accessToken = new URLSearchParams(paymentUrl.hash.slice(1)).get("access_token");
+      if (orderId && result.orderNumber && accessToken) {
+        try {
+          rememberGuestOrder(orderId, result.orderNumber, accessToken);
+        } catch (storageError) {
+          console.error("Unable to save guest order recovery details", storageError);
+        }
+      }
       clear();
       localStorage.removeItem("lilsurpriz-customization");
       window.location.assign(result.manualPaymentUrl);

@@ -41,8 +41,8 @@ export function SiteHeader() {
         </>}
       </Link>
       <div className="navlinks">{links.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}</div>
-      <div className="navactions">{isAdmin && <Link href="/admin">Admin</Link>}<Link href="/account">Account</Link><Link href="/cart" aria-label={`Cart, ${count} items`}>Bag ({count})</Link></div>
-      {open && <div className="mobile-nav">{links.map(([label, href]) => <Link onClick={() => setOpen(false)} key={href} href={href}>{label}</Link>)}{isAdmin && <Link onClick={() => setOpen(false)} href="/admin">Admin dashboard</Link>}</div>}
+      <div className="navactions">{isAdmin && <Link href="/admin">Admin</Link>}<Link href="/orders">My orders</Link><Link href="/account">Account</Link><Link href="/cart" aria-label={`Cart, ${count} items`}>Bag ({count})</Link></div>
+      {open && <div className="mobile-nav">{links.map(([label, href]) => <Link onClick={() => setOpen(false)} key={href} href={href}>{label}</Link>)}<Link onClick={() => setOpen(false)} href="/orders">My orders</Link>{isAdmin && <Link onClick={() => setOpen(false)} href="/admin">Admin dashboard</Link>}</div>}
     </nav></header>
   </>;
 }

@@ -13,7 +13,13 @@ const requestSchema = z.object({
   state: z.string().trim().min(2).max(80),
   pincode: z.string().regex(/^\d{6}$/),
   coupon: z.string().trim().max(40).optional(),
-  customization: z.record(z.string(), z.unknown()).optional(),
+  customization: z.object({
+    recipient: z.string().trim().min(1).max(100),
+    occasion: z.string().trim().min(1).max(80),
+    colour: z.string().trim().min(1).max(60),
+    note: z.string().max(500),
+    instructions: z.string().max(1000),
+  }).optional(),
 });
 
 export async function POST(request: Request) {
@@ -66,20 +72,33 @@ export async function POST(request: Request) {
 
   const orderNumber = `LS-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
   const guestAccess = user ? null : createGuestOrderAccessToken();
-  const { data: order, error: orderError } = await admin.from("orders").insert({
-    customer_id: user?.id ?? null, order_number: orderNumber, subtotal, shipping_charge: shipping, discount, total,
-    coupon_code: couponCode, cashfree_order_id: null, payment_method: "manual_upi",
-    payment_details: { upi_id: upiId, qr_url: settings?.upi_qr_url ?? null, ...(guestAccess ? { guest_access_token_hash: guestAccess.tokenHash } : {}) },
-    shipping_address: { name: parsed.data.name, phone: parsed.data.phone, address: parsed.data.address, city: parsed.data.city, state: parsed.data.state, pincode: parsed.data.pincode },
-    custom_details: parsed.data.customization ?? null,
-  }).select("id").single();
-  if (orderError || !order) return Response.json({ error: "Unable to create your order." }, { status: 500 });
-  const { error: linesError } = await admin.from("order_items").insert(orderLines.map(line => ({ ...line, order_id: order.id })));
-  if (linesError) {
-    await admin.from("orders").delete().eq("id", order.id);
-    return Response.json({ error: "Unable to save your order items." }, { status: 500 });
+  const { data: orderId, error: orderError } = await admin.rpc("create_manual_upi_order", {
+    p_customer_id: user?.id ?? null,
+    p_order_number: orderNumber,
+    p_subtotal: subtotal,
+    p_shipping_charge: shipping,
+    p_discount: discount,
+    p_total: total,
+    p_coupon_code: couponCode,
+    p_payment_details: { upi_id: upiId, qr_url: settings?.upi_qr_url ?? null, ...(guestAccess ? { guest_access_token_hash: guestAccess.tokenHash } : {}) },
+    p_shipping_address: { name: parsed.data.name, phone: parsed.data.phone, address: parsed.data.address, city: parsed.data.city, state: parsed.data.state, pincode: parsed.data.pincode },
+    p_custom_details: parsed.data.customization ?? null,
+    p_items: orderLines.map(line => ({ product_id: line.product_id, quantity: line.quantity, unit_price: line.unit_price })),
+  });
+  if (orderError || !orderId) {
+    if (orderError?.message === "INSUFFICIENT_STOCK") {
+      return Response.json({ error: orderError.details ?? "One of your selected gifts just sold out." }, { status: 409 });
+    }
+    if (orderError?.message === "PRICE_CHANGED") {
+      return Response.json({ error: "A product price changed. Please refresh your bag and try again." }, { status: 409 });
+    }
+    if (orderError?.message === "PRODUCT_UNAVAILABLE") {
+      return Response.json({ error: "One of your selected gifts is no longer available." }, { status: 409 });
+    }
+    console.error("Unable to create reserved manual UPI order", orderError?.message);
+    return Response.json({ error: "Unable to create your order. Please try again." }, { status: 500 });
   }
 
   const accessFragment = guestAccess ? `#access_token=${guestAccess.token}` : "";
-  return Response.json({ manualPaymentUrl: `/payment/manual?order_id=${encodeURIComponent(order.id)}${accessFragment}`, orderNumber });
+  return Response.json({ manualPaymentUrl: `/payment/manual?order_id=${encodeURIComponent(orderId)}${accessFragment}`, orderNumber });
 }

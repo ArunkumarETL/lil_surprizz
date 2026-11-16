@@ -72,6 +72,9 @@ export async function DELETE(request: Request) {
   if (imageReadError) return Response.json({ error: "Unable to load product images before deletion." }, { status: 500 });
 
   const { error } = await db.from("products").delete().eq("id", id);
+  if (error?.message === "PRODUCT_HAS_ACTIVE_STOCK_RESERVATION") {
+    return Response.json({ error: "This product has an order holding stock. Cancel or complete that order before deleting it." }, { status: 409 });
+  }
   if (error) return Response.json({ error: "Unable to permanently delete product." }, { status: 500 });
 
   const objectPaths = (images ?? []).flatMap(({ image_url }) => {

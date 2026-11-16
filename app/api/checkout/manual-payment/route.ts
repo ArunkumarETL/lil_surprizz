@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   const admin = createAdminClient();
   const { data: order, error } = await admin.from("orders")
-    .select("id,customer_id,order_number,total,order_status,payment_status,payment_method,payment_details,shipping_address,order_items(product_name,quantity,unit_price)")
+    .select("id,customer_id,order_number,total,order_status,payment_status,payment_method,payment_details,shipping_address,reservation_expires_at,reservation_expired,order_items(product_name,quantity,unit_price)")
     .eq("id", orderId).maybeSingle();
   if (error) return Response.json({ error: "Unable to load payment details." }, { status: 500 });
   if (!order || order.payment_method !== "manual_upi" || !canAccessOrder(order, user?.id ?? null, request.headers.get("x-order-access-token"))) {
@@ -28,6 +28,8 @@ export async function GET(request: Request) {
       total: Number(order.total),
       orderStatus: order.order_status,
       paymentStatus: order.payment_status,
+      reservationExpiresAt: order.reservation_expires_at,
+      reservationExpired: order.reservation_expired,
       items: order.order_items,
     },
     payment: {

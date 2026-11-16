@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { GuestOrderRecovery } from "@/components/guest-order-recovery";
 
 export const dynamic = "force-dynamic";
 export default async function OrdersPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/account");
+  if (!user) return <main className="section wrap"><span className="eyebrow">Your surprises</span><h1 style={{ fontSize: 44 }}>My orders</h1><GuestOrderRecovery /></main>;
   const { data: orders, error } = await supabase.from("orders").select("*, order_items(*)").eq("customer_id", user.id).order("created_at", { ascending: false });
   if (error) throw new Error(`Unable to load orders: ${error.message}`);
   return <main className="section wrap"><span className="eyebrow">Your surprises</span><h1 style={{ fontSize: 44 }}>My orders</h1>
@@ -15,5 +15,6 @@ export default async function OrdersPage() {
       {order.order_items.map((item: { id: string; product_name: string; quantity: number; unit_price: number }) => <div key={item.id} className="summary-line"><span>{item.product_name} × {item.quantity}</span><b>₹{Number(item.unit_price * item.quantity).toLocaleString("en-IN")}</b></div>)}
       <div className="summary-line total"><span>Payment: {order.payment_status}</span><b>₹{Number(order.total).toLocaleString("en-IN")}</b></div>{order.payment_method === "manual_upi" && order.payment_claim_reference && <p className="muted">UPI reference submitted: {order.payment_claim_reference}. Awaiting store verification.</p>}{order.payment_method === "manual_upi" && order.payment_status === "pending" && order.order_status === "Pending" && <Link className="btn btn-light" href={`/payment/manual?order_id=${encodeURIComponent(order.id)}`}>Continue UPI payment</Link>}{order.tracking_number && <p className="muted">Tracking: {order.tracking_number}</p>}
     </article>)}</div>}
+    <section style={{ marginTop: 40 }}><h2>Guest orders saved on this device</h2><GuestOrderRecovery /></section>
   </main>;
 }

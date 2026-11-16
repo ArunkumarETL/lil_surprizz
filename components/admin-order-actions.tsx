@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-export function AdminOrderActions({ id, status, tracking, paymentStatus, paymentMethod, paymentClaimReference }: { id: string; status: string; tracking: string | null; paymentStatus: string; paymentMethod: string; paymentClaimReference: string | null }) {
+export function AdminOrderActions({ id, status, tracking, paymentStatus, paymentMethod, paymentClaimReference, reservationExpired }: { id: string; status: string; tracking: string | null; paymentStatus: string; paymentMethod: string; paymentClaimReference: string | null; reservationExpired: boolean }) {
   const [nextStatus, setNextStatus] = useState(status);
   const [trackingNumber, setTrackingNumber] = useState(tracking ?? "");
   const [verifiedReference, setVerifiedReference] = useState("");
@@ -33,7 +33,8 @@ export function AdminOrderActions({ id, status, tracking, paymentStatus, payment
     <select value={nextStatus} onChange={e => setNextStatus(e.target.value)}>{statuses.map(s => <option key={s}>{s}</option>)}</select>
     {["Shipped", "Delivered"].includes(nextStatus) && <input aria-label="Tracking number" placeholder="Tracking number" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} />}
     <button onClick={save}>Save status</button>
-    {paymentMethod === "manual_upi" && paymentStatus === "pending" && <div style={{ display: "grid", gap: 6 }}>
+    {paymentMethod === "manual_upi" && (paymentStatus === "pending" || reservationExpired) && <div style={{ display: "grid", gap: 6 }}>
+      {reservationExpired && <small>The 30-minute stock hold expired. Verify the GPay transaction; if stock is unavailable, arrange a refund or replacement.</small>}
       <small>{paymentClaimReference ? `Customer-reported UTR: ${paymentClaimReference}` : "No customer UTR was submitted."}</small>
       <input aria-label="Verified GPay transaction reference" placeholder="Transaction reference from your GPay" minLength={6} maxLength={100} pattern="[A-Za-z0-9-]+" value={verifiedReference} onChange={e => setVerifiedReference(e.target.value)} />
       <button className="btn btn-pink" onClick={verifyPayment}>Confirm GPay payment</button>
