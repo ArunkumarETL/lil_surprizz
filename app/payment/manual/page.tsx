@@ -134,7 +134,15 @@ export default function ManualPaymentPage() {
           <p className="muted">If your bank rejects that option, try this alternate link. It keeps the amount and payment note but omits the transaction-reference field.</p>
           <a className="btn btn-light" href={compatibilityUpiUrl}>Try alternate UPI link</a>
         </div>
-        {payment.qrUrl && <details style={{ marginTop: 16 }}><summary>Backup: use the uploaded static QR</summary><p className="muted">This saved QR does not include this order’s amount. If you use it, enter ₹{order.total.toFixed(2)} and payment reference {order.paymentReference} yourself.</p><img src={payment.qrUrl} alt="Uploaded static UPI QR backup" style={{ width: 240, height: 240, objectFit: "contain", background: "#fff", padding: 10, border: "1px solid var(--line)", borderRadius: 12, margin: "16px auto" }} /></details>}
+        <details style={{ marginTop: 16 }}>
+          <summary>Having trouble with automatic UPI? Pay manually</summary>
+          <p className="muted">Open your UPI app, choose payment by UPI ID, and enter the exact amount shown below. This manual transfer is not prefilled.</p>
+          <p><b>UPI ID:</b> {payment.upiId}</p>
+          <p><b>Exact amount:</b> ₹{order.total.toFixed(2)}</p>
+          <p className="muted">Payment note (optional): {order.paymentReference}. If adding a note causes an error, leave it blank; the reference remains on this order page.</p>
+          {payment.qrUrl && <><p className="muted">Or scan this saved static QR from another device, then enter the exact amount above.</p><img src={payment.qrUrl} alt="Uploaded static UPI QR backup" style={{ width: 240, height: 240, objectFit: "contain", background: "#fff", padding: 10, border: "1px solid var(--line)", borderRadius: 12, margin: "16px auto" }} /></>}
+          <p className="muted">The order remains pending until the store verifies the payment in its GPay/bank account.</p>
+        </details>
         <p><b>Payment reference:</b> {order.paymentReference}</p>
         <p><b>Important:</b> Your order stays pending until the store verifies the payment in its GPay/bank account. Opening the UPI app does not confirm payment.</p>
       </section>
