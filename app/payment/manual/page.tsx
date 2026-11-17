@@ -24,6 +24,7 @@ export default function ManualPaymentPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [recoveryWarning, setRecoveryWarning] = useState("");
+  const [copyStatus, setCopyStatus] = useState("");
 
   async function loadOrder(orderId: string, token: string) {
     const response = await fetch(`/api/checkout/manual-payment?order_id=${encodeURIComponent(orderId)}`, {
@@ -40,6 +41,15 @@ export default function ManualPaymentPage() {
       }
     }
     setData(result);
+  }
+
+  async function copyPaymentDetail(label: string, value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyStatus(`${label} copied.`);
+    } catch {
+      setCopyStatus(`Could not copy ${label.toLowerCase()}. Select and copy it manually.`);
+    }
   }
 
   useEffect(() => {
@@ -72,8 +82,7 @@ export default function ManualPaymentPage() {
   if (!data) return <main className="section wrap" style={{ maxWidth: 700 }}><div className="notice" role="alert">{error}</div><Link className="btn btn-light" href="/orders">My orders</Link><Link className="btn btn-light" href="/shop">Continue shopping</Link></main>;
 
   const { order, payment } = data;
-  const paymentNote = order.customerName ? `${order.customerName} - ${order.orderNumber}` : order.orderNumber;
-  const upiUrl = `upi://pay?pa=${encodeURIComponent(payment.upiId)}&pn=${encodeURIComponent("LILSURPRIZ")}&am=${order.total.toFixed(2)}&cu=INR&tn=${encodeURIComponent(paymentNote)}`;
+  const paymentNote = order.orderNumber;
   const paid = order.paymentStatus === "paid";
   const cancelled = order.orderStatus === "Cancelled";
   const paidButCancelled = paid && cancelled;
@@ -90,13 +99,16 @@ export default function ManualPaymentPage() {
     {paidButCancelled ? <div className="notice" role="status">Payment was received, but this order was cancelled. Contact the store about fulfillment or a refund.</div> : paid ? <div className="notice" role="status">Payment verified. Your order is confirmed.</div> : cancelled || reservationExpired ? <div className="notice" role="status">{reservationExpired ? "The 30-minute stock hold expired. If you already paid, contact the store to confirm availability or arrange a refund." : "This order was cancelled. Contact the store if you already paid."}</div> : <>
       <section className="summary" style={{ marginTop: 20 }}>
         <h2 style={{ fontSize: 24 }}>Pay with Google Pay or another UPI app</h2>
-        <p className="muted">On this phone, use the button to open an installed UPI app. On another device, scan the QR and pay the exact amount shown above.</p>
+        <p className="muted">To pay on this phone, open GPay yourself, choose payment by UPI ID, and enter the details below. On another device, scan the QR and pay the exact amount shown above.</p>
         {order.reservationExpiresAt && <p className="notice">Your items are reserved until {new Date(order.reservationExpiresAt).toLocaleString("en-IN")}. Complete payment before then.</p>}
         <p><b>UPI ID:</b> {payment.upiId}</p>
+        <button type="button" className="btn btn-light" onClick={() => copyPaymentDetail("UPI ID", payment.upiId)}>Copy UPI ID</button>
         {payment.qrUrl && <img src={payment.qrUrl} alt="Scan to pay with UPI" style={{ width: 240, height: 240, objectFit: "contain", background: "#fff", padding: 10, border: "1px solid var(--line)", borderRadius: 12, margin: "16px auto" }} />}
-        <p className="muted"><b>GPay note:</b> Keep “{paymentNote}” in the note so we can match your payment to your order.</p>
+        <p className="muted"><b>Payment note:</b> {paymentNote}</p>
+        <button type="button" className="btn btn-light" onClick={() => copyPaymentDetail("Payment note", paymentNote)}>Copy payment note</button>
+        {copyStatus && <p className="muted" role="status">{copyStatus}</p>}
+        <p className="muted">Enter exactly ₹{order.total.toFixed(2)} in GPay and add the payment note above.</p>
         <p><b>Important:</b> Return to this page after paying. Payment is not confirmed until the store checks its GPay account.</p>
-        <a className="btn btn-pink" href={upiUrl}>Open GPay / UPI app</a>
       </section>
     </>}
     {recoveryWarning && <div className="notice" role="status">{recoveryWarning}</div>}
