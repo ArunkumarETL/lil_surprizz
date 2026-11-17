@@ -83,6 +83,12 @@ export default function ManualPaymentPage() {
 
   const { order, payment } = data;
   const paymentNote = order.orderNumber;
+  const upiUrl = `upi://pay?${new URLSearchParams({
+    pa: payment.upiId,
+    pn: "LILSURPRIZ",
+    am: order.total.toFixed(2),
+    cu: "INR",
+  })}`;
   const paid = order.paymentStatus === "paid";
   const cancelled = order.orderStatus === "Cancelled";
   const paidButCancelled = paid && cancelled;
@@ -99,7 +105,7 @@ export default function ManualPaymentPage() {
     {paidButCancelled ? <div className="notice" role="status">Payment was received, but this order was cancelled. Contact the store about fulfillment or a refund.</div> : paid ? <div className="notice" role="status">Payment verified. Your order is confirmed.</div> : cancelled || reservationExpired ? <div className="notice" role="status">{reservationExpired ? "The 30-minute stock hold expired. If you already paid, contact the store to confirm availability or arrange a refund." : "This order was cancelled. Contact the store if you already paid."}</div> : <>
       <section className="summary" style={{ marginTop: 20 }}>
         <h2 style={{ fontSize: 24 }}>Pay with Google Pay or another UPI app</h2>
-        <p className="muted">To pay on this phone, open GPay yourself, choose payment by UPI ID, and enter the details below. On another device, scan the QR and pay the exact amount shown above.</p>
+        <p className="muted">On this phone, open GPay or another UPI app with the recipient and amount prefilled. If that does not work, use the UPI ID below to pay manually. On another device, scan the QR.</p>
         {order.reservationExpiresAt && <p className="notice">Your items are reserved until {new Date(order.reservationExpiresAt).toLocaleString("en-IN")}. Complete payment before then.</p>}
         <p><b>UPI ID:</b> {payment.upiId}</p>
         <button type="button" className="btn btn-light" onClick={() => copyPaymentDetail("UPI ID", payment.upiId)}>Copy UPI ID</button>
@@ -109,6 +115,7 @@ export default function ManualPaymentPage() {
         {copyStatus && <p className="muted" role="status">{copyStatus}</p>}
         <p className="muted">Enter exactly ₹{order.total.toFixed(2)} in GPay and add the payment note above.</p>
         <p><b>Important:</b> Return to this page after paying. Payment is not confirmed until the store checks its GPay account.</p>
+        <a className="btn btn-pink" href={upiUrl}>Open GPay / UPI app</a>
       </section>
     </>}
     {recoveryWarning && <div className="notice" role="status">{recoveryWarning}</div>}
