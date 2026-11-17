@@ -105,6 +105,7 @@ export default function ManualPaymentPage() {
   if (!data) return <main className="section wrap" style={{ maxWidth: 700 }}><div className="notice" role="alert">{error}</div><Link className="btn btn-light" href="/orders">My orders</Link><Link className="btn btn-light" href="/shop">Continue shopping</Link></main>;
 
   const { order, payment } = data;
+  const upiUrl = buildUpiPaymentUrl(payment.upiId, order.total, order.paymentReference);
   const paid = order.paymentStatus === "paid";
   const cancelled = order.orderStatus === "Cancelled";
   const paidButCancelled = paid && cancelled;
@@ -128,6 +129,8 @@ export default function ManualPaymentPage() {
           <h3 style={{ fontSize: 20 }}>Dynamic QR — amount and payment note included</h3>
           {dynamicQr ? <img src={dynamicQr} alt={`Dynamic UPI QR for ${order.orderNumber}, amount ₹${order.total.toFixed(2)}`} style={{ width: 256, height: 256, objectFit: "contain", background: "#fff", padding: 8, border: "1px solid var(--line)", borderRadius: 12, margin: "12px auto" }} /> : qrError ? <p className="notice" role="alert">{qrError}</p> : <p className="muted" role="status">Preparing your order-specific QR…</p>}
           <p className="muted">This dynamic QR includes ₹{order.total.toFixed(2)} and reference {order.paymentReference}; you should not need to type the amount.</p>
+          <a className="btn btn-pink" href={upiUrl}>Open Google Pay / UPI app with amount</a>
+          <p className="muted">The app will show the prefilled amount for you to review and authorize. If the app handoff fails, scan the QR with another phone.</p>
         </div>
         <details style={{ marginTop: 16 }}>
           <summary>Having trouble with automatic UPI? Pay manually</summary>
