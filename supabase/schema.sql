@@ -103,8 +103,11 @@ create table if not exists public.orders (
   order_status text not null default 'Pending' check (order_status in ('Pending','Paid','Processing','Packed','Shipped','Delivered','Cancelled')),
   payment_status text not null default 'pending' check (payment_status in ('pending','paid','failed','refunded')),
   payment_method text not null default 'cashfree' check (payment_method in ('cashfree','manual_upi')),
+  payment_reference_code text,
   payment_reference text,
   payment_claim_reference text,
+  payment_verified_at timestamptz,
+  payment_verified_by uuid references auth.users(id),
   payment_details jsonb,
   cashfree_order_id text unique,
   tracking_number text,
@@ -122,6 +125,7 @@ create index if not exists orders_status_idx on public.orders(order_status);
 create index if not exists orders_reservation_expiry_idx on public.orders(reservation_expires_at) where stock_reserved and payment_status = 'pending';
 create unique index if not exists orders_payment_claim_reference_unique on public.orders(payment_claim_reference) where payment_claim_reference is not null;
 create unique index if not exists orders_manual_payment_reference_unique on public.orders(payment_reference) where payment_method = 'manual_upi' and payment_reference is not null;
+create unique index if not exists orders_payment_reference_code_unique on public.orders(payment_reference_code) where payment_reference_code is not null;
 
 create table if not exists public.order_items (
   id uuid primary key default gen_random_uuid(),
@@ -318,6 +322,9 @@ declare
   v_item record;
   v_product record;
 begin
+  if nullif(p_payment_details ->> 'payment_reference_code', '') is null then
+    raise exception using errcode = 'P0001', message = 'PAYMENT_REFERENCE_REQUIRED';
+  end if;
   if p_items is null or jsonb_typeof(p_items) <> 'array' then
     raise exception using errcode = 'P0001', message = 'INVALID_ORDER_ITEMS';
   end if;
@@ -336,6 +343,14 @@ begin
     from jsonb_to_recordset(p_items) as item(product_id uuid, quantity integer, unit_price numeric)
   ) then
     raise exception using errcode = 'P0001', message = 'INVALID_ORDER_ITEMS';
+  end if;
+  if p_discount > p_subtotal
+    or p_subtotal <> (
+      select coalesce(sum(unit_price * quantity), 0)
+      from jsonb_to_recordset(p_items) as item(product_id uuid, quantity integer, unit_price numeric)
+    )
+    or p_total <> round(p_subtotal - p_discount + p_shipping_charge, 2) then
+    raise exception using errcode = 'P0001', message = 'INVALID_ORDER_TOTAL';
   end if;
 
   perform public.expire_pending_order_reservations();
@@ -369,13 +384,13 @@ begin
 
   insert into public.orders (
     customer_id, order_number, subtotal, shipping_charge, discount, total,
-    coupon_code, payment_method, payment_details, shipping_address, custom_details,
-    stock_reserved, reservation_expires_at
+    coupon_code, payment_method, payment_status, payment_reference_code, payment_details,
+    shipping_address, custom_details, stock_reserved, reservation_expires_at
   )
   values (
     p_customer_id, p_order_number, p_subtotal, p_shipping_charge, p_discount, p_total,
-    p_coupon_code, 'manual_upi', p_payment_details, p_shipping_address, p_custom_details,
-    true, now() + interval '30 minutes'
+    p_coupon_code, 'manual_upi', 'pending', nullif(p_payment_details ->> 'payment_reference_code', ''), p_payment_details,
+    p_shipping_address, p_custom_details, true, now() + interval '30 minutes'
   )
   returning id into v_order_id;
 
@@ -390,7 +405,7 @@ $$;
 revoke all on function public.create_manual_upi_order(uuid, text, numeric, numeric, numeric, numeric, text, jsonb, jsonb, jsonb, jsonb) from public, anon, authenticated;
 grant execute on function public.create_manual_upi_order(uuid, text, numeric, numeric, numeric, numeric, text, jsonb, jsonb, jsonb, jsonb) to service_role;
 
-create or replace function public.complete_manual_upi_payment(p_order_id uuid, p_reference text)
+create or replace function public.complete_manual_upi_payment(p_order_id uuid, p_reference text, p_verified_by uuid)
 returns boolean
 language plpgsql
 security definer
@@ -400,6 +415,10 @@ declare
   v_order public.orders%rowtype;
   v_item record;
 begin
+  if p_verified_by is null or nullif(trim(p_reference), '') is null then
+    raise exception using errcode = 'P0001', message = 'VERIFICATION_DETAILS_REQUIRED';
+  end if;
+
   perform public.expire_pending_order_reservations();
 
   select *
@@ -481,7 +500,9 @@ begin
   update public.orders
   set payment_status = 'paid',
       order_status = 'Paid',
-      payment_reference = p_reference,
+      payment_reference = trim(p_reference),
+      payment_verified_at = now(),
+      payment_verified_by = p_verified_by,
       stock_reserved = false,
       reservation_expires_at = null,
       reservation_expired = false,
@@ -491,8 +512,8 @@ begin
   return true;
 end;
 $$;
-revoke all on function public.complete_manual_upi_payment(uuid, text) from public, anon, authenticated;
-grant execute on function public.complete_manual_upi_payment(uuid, text) to service_role;
+revoke all on function public.complete_manual_upi_payment(uuid, text, uuid) from public, anon, authenticated;
+grant execute on function public.complete_manual_upi_payment(uuid, text, uuid) to service_role;
 
 create or replace function public.cancel_order_and_release_stock(p_order_id uuid, p_tracking_number text)
 returns void

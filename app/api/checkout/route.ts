@@ -71,6 +71,7 @@ export async function POST(request: Request) {
   }
 
   const orderNumber = `LS-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
+  const paymentReference = `LS${crypto.randomUUID().replace(/-/g, "").toUpperCase()}`;
   const guestAccess = user ? null : createGuestOrderAccessToken();
   const { data: orderId, error: orderError } = await admin.rpc("create_manual_upi_order", {
     p_customer_id: user?.id ?? null,
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
     p_discount: discount,
     p_total: total,
     p_coupon_code: couponCode,
-    p_payment_details: { upi_id: upiId, qr_url: settings?.upi_qr_url ?? null, ...(guestAccess ? { guest_access_token_hash: guestAccess.tokenHash } : {}) },
+    p_payment_details: { upi_id: upiId, qr_url: settings?.upi_qr_url ?? null, payment_reference_code: paymentReference, ...(guestAccess ? { guest_access_token_hash: guestAccess.tokenHash } : {}) },
     p_shipping_address: { name: parsed.data.name, phone: parsed.data.phone, address: parsed.data.address, city: parsed.data.city, state: parsed.data.state, pincode: parsed.data.pincode },
     p_custom_details: parsed.data.customization ?? null,
     p_items: orderLines.map(line => ({ product_id: line.product_id, quantity: line.quantity, unit_price: line.unit_price })),
@@ -100,5 +101,5 @@ export async function POST(request: Request) {
   }
 
   const accessFragment = guestAccess ? `#access_token=${guestAccess.token}` : "";
-  return Response.json({ manualPaymentUrl: `/payment/manual?order_id=${encodeURIComponent(orderId)}${accessFragment}`, orderNumber });
+  return Response.json({ manualPaymentUrl: `/payment/manual?order_id=${encodeURIComponent(orderId)}${accessFragment}`, orderNumber, paymentReference });
 }

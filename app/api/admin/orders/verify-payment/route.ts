@@ -28,6 +28,7 @@ export async function POST(request: Request) {
   const { data: verified, error } = await db.rpc("complete_manual_upi_payment", {
     p_order_id: parsed.data.orderId,
     p_reference: parsed.data.verifiedReference,
+    p_verified_by: auth.user.id,
   });
   if (error) {
     console.error("Unable to confirm manual UPI payment", parsed.data.orderId, error.message);
