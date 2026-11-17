@@ -5,15 +5,15 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { getGuestOrderAccessToken, rememberGuestOrder } from "@/lib/guest-order-storage";
 
-function buildUpiPaymentUrl(upiId: string, amount: number, paymentReference: string, includeTransactionReference = true) {
+function buildUpiPaymentUrl(upiId: string, amount: number, paymentReference: string) {
   const params = new URLSearchParams({
     pa: upiId,
     pn: "LILSURPRIZ",
     am: amount.toFixed(2),
     cu: "INR",
     tn: paymentReference,
+    tr: paymentReference,
   });
-  if (includeTransactionReference) params.set("tr", paymentReference);
   return `upi://pay?${params}`;
 }
 
@@ -70,7 +70,7 @@ export default function ManualPaymentPage() {
       if (!cancelled) setDynamicQr(value);
     }).catch(error => {
       console.error("Unable to generate order-specific UPI QR", error);
-      if (!cancelled) setQrError("The order-specific QR could not be generated. Use a UPI app link or the backup static QR.");
+      if (!cancelled) setQrError("The order-specific QR could not be generated. Use the manual UPI option below.");
     });
     return () => { cancelled = true; };
   }, [data?.order.id, data?.order.total, data?.order.paymentReference, data?.payment.upiId]);
@@ -105,8 +105,6 @@ export default function ManualPaymentPage() {
   if (!data) return <main className="section wrap" style={{ maxWidth: 700 }}><div className="notice" role="alert">{error}</div><Link className="btn btn-light" href="/orders">My orders</Link><Link className="btn btn-light" href="/shop">Continue shopping</Link></main>;
 
   const { order, payment } = data;
-  const upiUrl = buildUpiPaymentUrl(payment.upiId, order.total, order.paymentReference);
-  const compatibilityUpiUrl = buildUpiPaymentUrl(payment.upiId, order.total, order.paymentReference, false);
   const paid = order.paymentStatus === "paid";
   const cancelled = order.orderStatus === "Cancelled";
   const paidButCancelled = paid && cancelled;
@@ -124,15 +122,12 @@ export default function ManualPaymentPage() {
     {paidButCancelled ? <div className="notice" role="status">Payment was received, but this order was cancelled. Contact the store about fulfillment or a refund.</div> : paid ? <div className="notice" role="status">Payment verified. Your order is confirmed.</div> : cancelled || reservationExpired ? <div className="notice" role="status">{reservationExpired ? "The 30-minute stock hold expired. If you already paid, contact the store to confirm availability or arrange a refund." : "This order was cancelled. Contact the store if you already paid."}</div> : <>
       <section className="summary" style={{ marginTop: 20 }}>
         <h2 style={{ fontSize: 24 }}>Pay with Google Pay or another UPI app</h2>
-        <p className="muted">Scan the order-specific QR on another device, or open a UPI app on this phone. Both options prefill the exact amount and this order’s payment reference. You must review and authorize the payment in your UPI app.</p>
+        <p className="muted">Scan this order-specific QR with another phone. It includes the exact amount and payment reference, so you won’t need to enter the amount. Review and authorize the payment in your UPI app.</p>
         {order.reservationExpiresAt && <p className="notice">Your items are reserved until {new Date(order.reservationExpiresAt).toLocaleString("en-IN")}. Complete payment before then.</p>}
         <div className="summary" style={{ marginTop: 16, textAlign: "center" }}>
           <h3 style={{ fontSize: 20 }}>Dynamic QR — amount and payment note included</h3>
           {dynamicQr ? <img src={dynamicQr} alt={`Dynamic UPI QR for ${order.orderNumber}, amount ₹${order.total.toFixed(2)}`} style={{ width: 256, height: 256, objectFit: "contain", background: "#fff", padding: 8, border: "1px solid var(--line)", borderRadius: 12, margin: "12px auto" }} /> : qrError ? <p className="notice" role="alert">{qrError}</p> : <p className="muted" role="status">Preparing your order-specific QR…</p>}
           <p className="muted">This dynamic QR includes ₹{order.total.toFixed(2)} and reference {order.paymentReference}; you should not need to type the amount.</p>
-          <a className="btn btn-pink" href={upiUrl}>Pay with UPI app</a>
-          <p className="muted">If your bank rejects that option, try this alternate link. It keeps the amount and payment note but omits the transaction-reference field.</p>
-          <a className="btn btn-light" href={compatibilityUpiUrl}>Try alternate UPI link</a>
         </div>
         <details style={{ marginTop: 16 }}>
           <summary>Having trouble with automatic UPI? Pay manually</summary>
