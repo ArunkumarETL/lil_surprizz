@@ -101,7 +101,7 @@ export async function POST(request: Request) {
   const { data: settings, error: settingsError } = await admin.from("store_settings")
     .select("shipping_charge,free_shipping_threshold,whatsapp_number").eq("id", 1).maybeSingle();
   if (settingsError) return Response.json({ error: "Unable to load delivery and WhatsApp settings." }, { status: 500 });
-  const whatsappNumber = normalizeWhatsAppNumber(String(settings?.whatsapp_number ?? process.env.WHATSAPP_NUMBER ?? ""));
+  const whatsappNumber = normalizeWhatsAppNumber(String(settings?.whatsapp_number || process.env.WHATSAPP_NUMBER || "9585664547"));
   if (!whatsappNumber) return Response.json({ error: "WhatsApp orders are not available right now. Please contact the store." }, { status: 503 });
 
   const shipping = subtotal - discount >= Number(settings?.free_shipping_threshold ?? 999) ? 0 : Number(settings?.shipping_charge ?? 60);
