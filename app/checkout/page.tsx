@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useCart } from "@/components/store-provider";
 import { rememberGuestOrder } from "@/lib/guest-order-storage";
 
-const maxPhotos = 3;
-const maxPhotoBytes = 1_000_000;
+const maxPhotos = 10;
+const maxPhotoBytes = 350_000;
 const maxOriginalPhotoBytes = 20_000_000;
 const acceptedPhotoTypes = ["image/jpeg", "image/png", "image/webp"];
 
@@ -30,9 +30,12 @@ async function optimizePhoto(file: File) {
       return new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/webp", quality));
     };
 
-    let blob = await render(1600, 0.82);
-    if (!blob) throw new Error(`Could not prepare ${file.name}. Please try another photo.`);
-    if (blob.size > maxPhotoBytes) blob = await render(1200, 0.65);
+    let blob: Blob | null = null;
+    for (const [maxDimension, quality] of [[1600, 0.82], [1200, 0.65], [1000, 0.55], [800, 0.45]] as const) {
+      blob = await render(maxDimension, quality);
+      if (!blob) throw new Error(`Could not prepare ${file.name}. Please try another photo.`);
+      if (blob.size <= maxPhotoBytes) break;
+    }
     if (!blob || blob.size > maxPhotoBytes) throw new Error(`${file.name} is too large after resizing. Please choose another photo.`);
     return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.webp`, { type: "image/webp", lastModified: Date.now() });
   } finally {

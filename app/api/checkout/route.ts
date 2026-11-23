@@ -5,8 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeWhatsAppNumber } from "@/lib/whatsapp";
 
 const photoBucket = "customer-order-photos";
-const maxPhotos = 3;
-const maxPhotoBytes = 1_000_000;
+const maxPhotos = 10;
+const maxPhotoBytes = 350_000;
 const photoTypes: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
 const requestSchema = z.object({
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   }
   const photos = photoEntries as File[];
   if (photos.some(photo => !photoTypes[photo.type] || photo.size <= 0 || photo.size > maxPhotoBytes)) {
-    return Response.json({ error: "Each photo must be a JPG, PNG, or WebP under 1 MB after resizing." }, { status: 400 });
+    return Response.json({ error: "Each photo must be a JPG, PNG, or WebP under 350 KB after resizing." }, { status: 400 });
   }
   if (photos.reduce((sum, photo) => sum + photo.size, 0) > maxPhotos * maxPhotoBytes) {
     return Response.json({ error: "The selected photos are too large. Please remove a photo and try again." }, { status: 400 });
