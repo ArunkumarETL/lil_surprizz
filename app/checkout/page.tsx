@@ -57,6 +57,11 @@ export default function CheckoutPage() {
   const [message, setMessage] = useState("");
   const [submittedOrder, setSubmittedOrder] = useState("");
   const [whatsappUrl, setWhatsappUrl] = useState("");
+  const [returnedFromWhatsApp, setReturnedFromWhatsApp] = useState(false);
+  const whatsappStartedRef = useRef(false);
+  const leftPageRef = useRef(false);
+  const returnedToPageRef = useRef(false);
+  const orderSavedRef = useRef(false);
   const [recoveryWarning, setRecoveryWarning] = useState("");
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const shipping = Math.max(0, subtotal - (appliedCoupon?.discount ?? 0)) >= delivery.free_shipping_threshold ? 0 : delivery.shipping_charge;
@@ -73,6 +78,38 @@ export default function CheckoutPage() {
   useEffect(() => {
     localStorage.removeItem("lilsurpriz-customization");
     return () => photoUrls.current.forEach(url => URL.revokeObjectURL(url));
+  }, []);
+
+  useEffect(() => {
+    function showSuccessOnReturn() {
+      if (!whatsappStartedRef.current || !leftPageRef.current) return;
+      returnedToPageRef.current = true;
+      if (orderSavedRef.current) {
+        setReturnedFromWhatsApp(true);
+        setMessage("Ordered successfully ✅ Your request is saved and pending store confirmation.");
+      }
+    }
+
+    function handleBlur() {
+      if (whatsappStartedRef.current) leftPageRef.current = true;
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden" && whatsappStartedRef.current) {
+        leftPageRef.current = true;
+      } else if (document.visibilityState === "visible") {
+        showSuccessOnReturn();
+      }
+    }
+
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", showSuccessOnReturn);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", showSuccessOnReturn);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   function addPhotos(files: FileList | null) {
@@ -116,6 +153,7 @@ export default function CheckoutPage() {
     setError("");
     setMessage("");
     const whatsappWindow = window.open("about:blank", "_blank");
+    whatsappStartedRef.current = Boolean(whatsappWindow);
     if (whatsappWindow) whatsappWindow.opener = null;
     try {
       const body = new FormData();
@@ -143,7 +181,11 @@ export default function CheckoutPage() {
       clear();
       setSubmittedOrder(result.orderNumber);
       setWhatsappUrl(result.whatsappUrl);
-      setMessage("Your order request is saved. WhatsApp is opening with your order details and photo links. Review them and tap Send.");
+      orderSavedRef.current = true;
+      setMessage(returnedToPageRef.current
+        ? "Ordered successfully ✅ Your request is saved and pending store confirmation."
+        : "Your order request is saved. WhatsApp is opening with your order details and photo links. Tap Send there, then return here.");
+      if (returnedToPageRef.current) setReturnedFromWhatsApp(true);
       if (whatsappWindow) whatsappWindow.location.href = result.whatsappUrl;
       photoPreviews.forEach(photo => URL.revokeObjectURL(photo.url));
       photoUrls.current = [];
@@ -166,12 +208,12 @@ export default function CheckoutPage() {
   }
 
   if (submittedOrder) return <main className="section wrap" style={{ maxWidth: 700 }}>
-    <span className="eyebrow">Order request saved</span><h1 style={{ fontSize: 44 }}>Almost done</h1>
+    <span className="eyebrow">{returnedFromWhatsApp ? "Order complete" : "Order request saved"}</span><h1 style={{ fontSize: 44 }}>{returnedFromWhatsApp ? "Ordered successfully ✅" : "Almost done"}</h1>
     <div className="notice success" role="status">{message}</div>
     <p><b>Order number:</b> {submittedOrder}</p>
-    <p className="muted">No payment has been taken. WhatsApp should open with your order details and private photo links. Review the message and tap Send. Photo links expire after 7 days. Items are held for 30 minutes.</p>
+    <p className="muted">{returnedFromWhatsApp ? "If you sent the WhatsApp message, your order request is complete. Returning here cannot verify that WhatsApp delivered it. We’ll confirm availability and arrange payment with you directly; no payment has been taken." : "No payment has been taken. WhatsApp should open with your order details and private photo links. Tap Send there, then return here. Photo links expire after 7 days. Items are held for 30 minutes."}</p>
     {recoveryWarning && <p className="notice" role="status">{recoveryWarning}</p>}
-    <a className="btn btn-pink" href={whatsappUrl} target="_blank" rel="noreferrer">Open WhatsApp to send your order</a>
+    <a className="btn btn-pink" href={whatsappUrl} target="_blank" rel="noreferrer" onClick={() => { whatsappStartedRef.current = true; }}>{returnedFromWhatsApp ? "Open WhatsApp again" : "Open WhatsApp to send your order"}</a>
     <p style={{ marginTop: 20 }}><Link className="text-link" href="/shop">Continue shopping</Link></p>
   </main>;
 
