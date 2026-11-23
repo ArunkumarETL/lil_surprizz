@@ -125,7 +125,13 @@ export async function POST(request: Request) {
     if (error) {
       await removeCustomerPhotos(admin, uploadedPaths);
       console.error("Unable to upload customer order photo", error.message);
-      return Response.json({ error: "Unable to save your photos. Please try again or contact the store." }, { status: 503 });
+      const storageError = error.message.toLowerCase();
+      const uploadMessage = /row-level security|permission denied|unauthorized|forbidden|invalid jwt|invalid api key/.test(storageError)
+        ? "Photo upload permissions are not configured on the store server. Please contact the store."
+        : /bucket.*not found|not found.*bucket/.test(storageError)
+          ? "Photo storage is not configured for this website yet. Please contact the store."
+          : "Unable to save your photos. Please try again or contact the store.";
+      return Response.json({ error: uploadMessage }, { status: 503 });
     }
     uploadedPaths.push(path);
   }
@@ -168,6 +174,10 @@ export async function POST(request: Request) {
     }
     if (orderError?.message === "PRODUCT_UNAVAILABLE") {
       return Response.json({ error: "One of your selected gifts is no longer available." }, { status: 409 });
+    }
+    if (orderError?.message === "PAYMENT_REFERENCE_REQUIRED") {
+      console.error("WhatsApp checkout database migration is missing", orderNumber);
+      return Response.json({ error: "WhatsApp checkout needs a database update. Please contact the store." }, { status: 503 });
     }
     console.error("Unable to create WhatsApp order request", orderError?.message);
     return Response.json({ error: "Unable to save your order request. Please try again." }, { status: 500 });

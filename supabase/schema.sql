@@ -325,7 +325,8 @@ declare
   v_item record;
   v_product record;
 begin
-  if nullif(p_payment_details ->> 'payment_reference_code', '') is null then
+  if coalesce(p_payment_details ->> 'payment_flow', '') <> 'whatsapp'
+    and nullif(p_payment_details ->> 'payment_reference_code', '') is null then
     raise exception using errcode = 'P0001', message = 'PAYMENT_REFERENCE_REQUIRED';
   end if;
   if p_items is null or jsonb_typeof(p_items) <> 'array' then
