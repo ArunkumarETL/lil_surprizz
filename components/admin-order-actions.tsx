@@ -16,8 +16,8 @@ export function AdminOrderActions({ id, status, tracking, paymentStatus, payment
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to update order."); }
   }
   async function verifyPayment() {
-    if (verifiedReference.trim().length < 6) { setMessage("Enter the transaction reference you verified in GPay."); return; }
-    if (!window.confirm("Only continue after checking that the full amount was received in your GPay account. Confirm this UPI payment?")) return;
+    if (verifiedReference.trim().length < 6) { setMessage("Enter the transaction reference you verified in your payment account."); return; }
+    if (!window.confirm("Only continue after checking that the full amount was received in your account. Confirm this payment?")) return;
     setMessage("");
     try {
       const response = await fetch("/api/admin/orders/verify-payment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: id, verifiedReference }) });
@@ -34,10 +34,10 @@ export function AdminOrderActions({ id, status, tracking, paymentStatus, payment
     {["Shipped", "Delivered"].includes(nextStatus) && <input aria-label="Tracking number" placeholder="Tracking number" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} />}
     <button onClick={save}>Save status</button>
     {paymentMethod === "manual_upi" && (paymentStatus === "pending" || reservationExpired) && <div style={{ display: "grid", gap: 6 }}>
-      {reservationExpired && <small>The 30-minute stock hold expired. Verify the GPay transaction; if stock is unavailable, arrange a refund or replacement.</small>}
+      {reservationExpired && <small>The 30-minute stock hold expired. Confirm stock is available before confirming payment; otherwise arrange a refund or replacement.</small>}
       <small>{paymentClaimReference ? `Customer-reported UTR: ${paymentClaimReference}` : "No customer UTR was submitted."}</small>
-      <input aria-label="Verified GPay transaction reference" placeholder="Transaction reference from your GPay" minLength={6} maxLength={100} pattern="[A-Za-z0-9-]+" value={verifiedReference} onChange={e => setVerifiedReference(e.target.value)} />
-      <button className="btn btn-pink" onClick={verifyPayment}>Confirm GPay payment</button>
+      <input aria-label="Verified payment transaction reference" placeholder="Verified transaction reference / UTR" minLength={6} maxLength={100} pattern="[A-Za-z0-9-]+" value={verifiedReference} onChange={e => setVerifiedReference(e.target.value)} />
+      <button className="btn btn-pink" onClick={verifyPayment}>Confirm payment received</button>
     </div>}
     {message && <small role="status">{message}</small>}
   </div>;

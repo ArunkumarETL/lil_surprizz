@@ -2,12 +2,19 @@ import { z } from "zod";
 import { createGuestOrderAccessToken } from "@/lib/guest-order-access";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizeWhatsAppNumber } from "@/lib/whatsapp";
+
+const photoBucket = "customer-order-photos";
+const maxPhotos = 3;
+const maxPhotoBytes = 1_000_000;
+const photoTypes: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
 const requestSchema = z.object({
   items: z.array(z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1).max(25) })).min(1).max(30)
     .refine(items => new Set(items.map(item => item.productId)).size === items.length, "Duplicate products are not allowed."),
   name: z.string().trim().min(2).max(100),
   phone: z.string().regex(/^[6-9]\d{9}$/),
+  email: z.union([z.string().trim().email().max(254), z.literal("")]).optional(),
   address: z.string().trim().min(8).max(300),
   city: z.string().trim().min(2).max(80),
   state: z.string().trim().min(2).max(80),
@@ -22,12 +29,45 @@ const requestSchema = z.object({
   }).optional(),
 });
 
+async function removeCustomerPhotos(admin: ReturnType<typeof createAdminClient>, paths: string[]) {
+  if (!paths.length) return;
+  const { error } = await admin.storage.from(photoBucket).remove(paths);
+  if (error) console.error("Unable to clean up customer photo uploads", error.message);
+}
+
+function messageText(value: string) {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
 export async function POST(request: Request) {
-  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "Please check your delivery details and items." }, { status: 400 });
+  const formData = await request.formData().catch(() => null);
+  if (!formData) return Response.json({ error: "Please submit the order form again." }, { status: 400 });
+  const orderData = formData.get("order");
+  if (typeof orderData !== "string") return Response.json({ error: "Order details are missing." }, { status: 400 });
+
+  let rawOrder: unknown;
+  try {
+    rawOrder = JSON.parse(orderData);
+  } catch {
+    return Response.json({ error: "Order details could not be read." }, { status: 400 });
+  }
+  const parsed = requestSchema.safeParse(rawOrder);
+  if (!parsed.success) return Response.json({ error: "Please check your delivery details and selected items." }, { status: 400 });
+
+  const photoEntries = formData.getAll("photos");
+  if (photoEntries.length > maxPhotos || photoEntries.some(entry => typeof entry === "string")) {
+    return Response.json({ error: `Choose up to ${maxPhotos} valid photos.` }, { status: 400 });
+  }
+  const photos = photoEntries as File[];
+  if (photos.some(photo => !photoTypes[photo.type] || photo.size <= 0 || photo.size > maxPhotoBytes)) {
+    return Response.json({ error: "Each photo must be a JPG, PNG, or WebP under 1 MB after resizing." }, { status: 400 });
+  }
+  if (photos.reduce((sum, photo) => sum + photo.size, 0) > maxPhotos * maxPhotoBytes) {
+    return Response.json({ error: "The selected photos are too large. Please remove a photo and try again." }, { status: 400 });
+  }
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-
   const admin = createAdminClient();
   const requested = parsed.data.items;
   const productIds = [...new Set(requested.map(item => item.productId))];
@@ -57,22 +97,50 @@ export async function POST(request: Request) {
     discount = Math.min(subtotal, Math.round(discount * 100) / 100);
     couponCode = coupon.code;
   }
-  const { data: settings, error: settingsError } = await admin.from("store_settings").select("shipping_charge,free_shipping_threshold,upi_id,upi_qr_url").eq("id", 1).maybeSingle();
-  if (settingsError) return Response.json({ error: "Unable to load payment and delivery settings." }, { status: 500 });
-  const upiId = String(settings?.upi_id ?? "").trim();
-  if (!/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/.test(upiId)) {
-    return Response.json({ error: "Manual UPI payment is not configured. Please contact the store." }, { status: 503 });
-  }
+
+  const { data: settings, error: settingsError } = await admin.from("store_settings")
+    .select("shipping_charge,free_shipping_threshold,whatsapp_number").eq("id", 1).maybeSingle();
+  if (settingsError) return Response.json({ error: "Unable to load delivery and WhatsApp settings." }, { status: 500 });
+  const whatsappNumber = normalizeWhatsAppNumber(String(settings?.whatsapp_number ?? process.env.WHATSAPP_NUMBER ?? ""));
+  if (!whatsappNumber) return Response.json({ error: "WhatsApp orders are not available right now. Please contact the store." }, { status: 503 });
+
   const shipping = subtotal - discount >= Number(settings?.free_shipping_threshold ?? 999) ? 0 : Number(settings?.shipping_charge ?? 60);
   const total = Math.round((subtotal - discount + shipping) * 100) / 100;
   if (user) {
-    const { error: customerError } = await admin.from("customers").upsert({ id: user.id, full_name: parsed.data.name, email: user.email ?? null, phone: parsed.data.phone });
+    const { error: customerError } = await admin.from("customers").upsert({ id: user.id, full_name: parsed.data.name, email: (user.email ?? parsed.data.email) || null, phone: parsed.data.phone });
     if (customerError) return Response.json({ error: "Unable to save customer details." }, { status: 500 });
   }
 
   const orderNumber = `LS-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
-  const paymentReference = `LS${crypto.randomUUID().replace(/-/g, "").toUpperCase()}`;
   const guestAccess = user ? null : createGuestOrderAccessToken();
+  const uploadedPaths: string[] = [];
+  for (const photo of photos) {
+    const extension = photoTypes[photo.type];
+    const path = `orders/${orderNumber}/${crypto.randomUUID()}.${extension}`;
+    const { error } = await admin.storage.from(photoBucket).upload(path, await photo.arrayBuffer(), {
+      contentType: photo.type,
+      cacheControl: "3600",
+      upsert: false,
+    });
+    if (error) {
+      await removeCustomerPhotos(admin, uploadedPaths);
+      console.error("Unable to upload customer order photo", error.message);
+      return Response.json({ error: "Unable to save your photos. Please try again or contact the store." }, { status: 503 });
+    }
+    uploadedPaths.push(path);
+  }
+
+  const signedPhotoUrls: string[] = [];
+  for (const path of uploadedPaths) {
+    const { data, error } = await admin.storage.from(photoBucket).createSignedUrl(path, 60 * 60 * 24 * 7);
+    if (error || !data?.signedUrl) {
+      await removeCustomerPhotos(admin, uploadedPaths);
+      console.error("Unable to create secure link for customer order photo", error?.message ?? "Missing signed URL.");
+      return Response.json({ error: "Unable to prepare your photos for WhatsApp. Please try again." }, { status: 503 });
+    }
+    signedPhotoUrls.push(data.signedUrl);
+  }
+
   const { data: orderId, error: orderError } = await admin.rpc("create_manual_upi_order", {
     p_customer_id: user?.id ?? null,
     p_order_number: orderNumber,
@@ -81,12 +149,17 @@ export async function POST(request: Request) {
     p_discount: discount,
     p_total: total,
     p_coupon_code: couponCode,
-    p_payment_details: { upi_id: upiId, qr_url: settings?.upi_qr_url ?? null, payment_reference_code: paymentReference, ...(guestAccess ? { guest_access_token_hash: guestAccess.tokenHash } : {}) },
-    p_shipping_address: { name: parsed.data.name, phone: parsed.data.phone, address: parsed.data.address, city: parsed.data.city, state: parsed.data.state, pincode: parsed.data.pincode },
+    p_payment_details: {
+      payment_flow: "whatsapp",
+      customer_photo_paths: uploadedPaths,
+      ...(guestAccess ? { guest_access_token_hash: guestAccess.tokenHash } : {}),
+    },
+    p_shipping_address: { name: parsed.data.name, phone: parsed.data.phone, email: parsed.data.email || null, address: parsed.data.address, city: parsed.data.city, state: parsed.data.state, pincode: parsed.data.pincode },
     p_custom_details: parsed.data.customization ?? null,
     p_items: orderLines.map(line => ({ product_id: line.product_id, quantity: line.quantity, unit_price: line.unit_price })),
   });
   if (orderError || !orderId) {
+    await removeCustomerPhotos(admin, uploadedPaths);
     if (orderError?.message === "INSUFFICIENT_STOCK") {
       return Response.json({ error: orderError.details ?? "One of your selected gifts just sold out." }, { status: 409 });
     }
@@ -96,10 +169,32 @@ export async function POST(request: Request) {
     if (orderError?.message === "PRODUCT_UNAVAILABLE") {
       return Response.json({ error: "One of your selected gifts is no longer available." }, { status: 409 });
     }
-    console.error("Unable to create reserved manual UPI order", orderError?.message);
-    return Response.json({ error: "Unable to create your order. Please try again." }, { status: 500 });
+    console.error("Unable to create WhatsApp order request", orderError?.message);
+    return Response.json({ error: "Unable to save your order request. Please try again." }, { status: 500 });
   }
 
-  const accessFragment = guestAccess ? `#access_token=${guestAccess.token}` : "";
-  return Response.json({ manualPaymentUrl: `/payment/manual?order_id=${encodeURIComponent(orderId)}${accessFragment}`, orderNumber, paymentReference });
+  const itemSummary = orderLines.map(line => `${line.quantity} × ${messageText(line.product_name)} (₹${(line.unit_price * line.quantity).toLocaleString("en-IN")})`).join("\n");
+  const address = [parsed.data.address, parsed.data.city, parsed.data.state, parsed.data.pincode].map(messageText).join(", ");
+  const message = [
+    `Hi LILSURPRIZ, I'd like to place order request ${orderNumber}.`,
+    `Name: ${messageText(parsed.data.name)}`,
+    `Phone: ${parsed.data.phone}`,
+    ...(parsed.data.email ? [`Email: ${messageText(parsed.data.email)}`] : []),
+    `Delivery address: ${address}`,
+    `Items:\n${itemSummary}`,
+    `Subtotal: ₹${subtotal.toLocaleString("en-IN")}`,
+    `Delivery: ${shipping ? `₹${shipping.toLocaleString("en-IN")}` : "Free"}`,
+    ...(discount ? [`Discount${couponCode ? ` (${couponCode})` : ""}: ₹${discount.toLocaleString("en-IN")}`] : []),
+    `Estimated total: ₹${total.toLocaleString("en-IN")}`,
+    ...(signedPhotoUrls.length ? [`Photo lamp images:\n${signedPhotoUrls.join("\n")}`] : []),
+    ...(parsed.data.customization ? [`Customization: ${messageText(parsed.data.customization.recipient)} · ${messageText(parsed.data.customization.occasion)} · ${messageText(parsed.data.customization.colour)}`, parsed.data.customization.note ? `Message: ${messageText(parsed.data.customization.note)}` : "", parsed.data.customization.instructions ? `Instructions: ${messageText(parsed.data.customization.instructions)}` : ""].filter(Boolean) : []),
+    "Please confirm availability and share payment instructions. Items are held for 30 minutes. I have not paid yet.",
+  ].join("\n");
+  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
+  return Response.json({
+    orderId,
+    orderNumber,
+    whatsappUrl,
+    ...(guestAccess ? { accessToken: guestAccess.token } : {}),
+  }, { headers: { "Cache-Control": "no-store" } });
 }

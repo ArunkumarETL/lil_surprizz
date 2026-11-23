@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     .eq("id", parsed.data.orderId).maybeSingle();
   if (readError) return Response.json({ error: "Unable to load this order." }, { status: 500 });
   if (!order) return Response.json({ error: "Order not found." }, { status: 404 });
-  if (order.payment_method !== "manual_upi") return Response.json({ error: "Only manual UPI payments can be confirmed here." }, { status: 409 });
+  if (order.payment_method !== "manual_upi") return Response.json({ error: "Only store-arranged payments can be confirmed here." }, { status: 409 });
   if (order.payment_status === "paid") return Response.json({ verified: true, alreadyVerified: true });
   const expiredReservation = order.payment_status === "failed" && order.order_status === "Cancelled" && order.reservation_expired;
   if ((order.payment_status !== "pending" && !expiredReservation) || (order.order_status === "Cancelled" && !expiredReservation)) {

@@ -4,12 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Product } from "@/lib/types";
 import { useCart } from "@/components/store-provider";
-import { normalizeWhatsAppNumber } from "@/lib/whatsapp";
 
 const surpriseMe = "Surprise me";
 const occasions = ["Birthday", "Bestie surprise", "Thank you", "Just because", "Self care"];
 
-export function CustomBuilder({ products, whatsapp, colours }: { products: Product[]; whatsapp: string; colours: string[] }) {
+export function CustomBuilder({ products, colours }: { products: Product[]; colours: string[] }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [recipient, setRecipient] = useState("");
   const [occasion, setOccasion] = useState(occasions[0]);
@@ -23,38 +22,12 @@ export function CustomBuilder({ products, whatsapp, colours }: { products: Produ
   const total = selected.reduce((sum, product) => sum + product.price * quantities[product.id], 0);
   const details = { recipient, occasion, colour, note, instructions, items: selected.map(p => ({ productId: p.id, name: p.name, quantity: quantities[p.id], unitPrice: p.price })), estimatedTotal: total };
 
-  async function saveAndContinue(channel: "whatsapp" | "online") {
+  function continueToCheckout() {
     if (!selected.length || !recipient.trim()) { setMessage("Choose at least one gift and add the recipient’s name."); return; }
-    const whatsappNumber = normalizeWhatsAppNumber(whatsapp);
-    if (channel === "whatsapp" && !whatsappNumber) { setMessage("The store has not added a valid WhatsApp number yet. Please use Contact Us."); return; }
     setMessage("");
-    let whatsappWindow: Window | null = null;
-    let whatsappUrl = "";
-    if (channel === "whatsapp") {
-      const lines = selected.map(p => `• ${p.name} × ${quantities[p.id]} — ₹${(p.price * quantities[p.id]).toLocaleString("en-IN")}`).join("\n");
-      const text = `Hi LILSURPRIZ! I'd love a custom gift box.\nRecipient: ${recipient}\nOccasion: ${occasion}\nBox: ${colour}\nItems:\n${lines}\nMessage: ${note || "None"}\nInstructions: ${instructions || "None"}\nEstimated total: ₹${total.toLocaleString("en-IN")}`;
-      whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`;
-      whatsappWindow = window.open("about:blank", "_blank");
-      if (whatsappWindow) whatsappWindow.opener = null;
-    }
-    try {
-      const response = await fetch("/api/custom-enquiries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(details) });
-      if (!response.ok) {
-        const result = await response.json() as { error?: string };
-        throw new Error(result.error ?? "Could not save your custom gift request.");
-      }
-      if (channel === "whatsapp") {
-        if (whatsappWindow && !whatsappWindow.closed) whatsappWindow.location.href = whatsappUrl;
-        else window.location.assign(whatsappUrl);
-      } else {
-        selected.forEach(product => add(product, quantities[product.id]));
-        localStorage.setItem("lilsurpriz-customization", JSON.stringify(details));
-        router.push("/checkout");
-      }
-    } catch (error) {
-      whatsappWindow?.close();
-      setMessage(error instanceof Error ? error.message : "Something went wrong.");
-    }
+    selected.forEach(product => add(product, quantities[product.id]));
+    localStorage.setItem("lilsurpriz-customization", JSON.stringify(details));
+    router.push("/checkout");
   }
 
   return <div className="split"><div><h2 style={{ fontSize: 24 }}>Pick their little joys</h2>{products.length ? products.map(product => <label key={product.id} className="cart-row" style={{ gridTemplateColumns: "1fr auto", cursor: "pointer" }}>
@@ -69,8 +42,7 @@ export function CustomBuilder({ products, whatsapp, colours }: { products: Produ
       <div className="field"><label>Special instructions</label><textarea maxLength={1000} value={instructions} onChange={e => setInstructions(e.target.value)} /></div>
       <div className="summary-line total"><span>Estimated gift total</span><b>₹{total.toLocaleString("en-IN")}</b></div>
       {message && <div role="alert" className="notice">{message}</div>}
-      <button className="btn btn-pink" onClick={() => saveAndContinue("online")}>Add to bag & pay online</button>
-      <button className="btn btn-light" onClick={() => saveAndContinue("whatsapp")}>Continue with WhatsApp</button>
-      <small className="muted">WhatsApp requests are enquiries only; no payment is taken or marked as paid.</small>
+      <button className="btn btn-pink" onClick={continueToCheckout}>Continue to order details</button>
+      <small className="muted">Add delivery details and any photo lamp images next, then review and send your request in WhatsApp.</small>
     </div></div></div>;
 }

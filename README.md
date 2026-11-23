@@ -15,21 +15,20 @@ Mobile-first ecommerce application built with Next.js and Supabase.
 - Product, category, stock, price, image, and settings management is backed by Supabase.
 - Active hamper box colours are managed in `/admin/box-colours` and appear automatically in the custom hamper builder.
 - Product and logo images are stored in the `product-images` Storage bucket. Product images are resized to a 1600px maximum dimension and WebP-encoded in the browser.
-- Orders are re-priced and stock-checked on the server. Customers can check out as guests with delivery details, without signing in. Checkout uses manual UPI only. Configure the UPI ID and upload the merchant QR in `/admin/settings`; customers include the order note shown at payment so the store can match payments in GPay and confirm orders in `/admin/orders`.
+- Orders are re-priced and stock-checked on the server. Customers can submit an order request as guests with delivery details and optional product photos. Checkout does not take payment; customers review and send the prepared order details in WhatsApp, and the store arranges payment directly.
 - Existing Cashfree orders can still be reconciled through the payment webhook; Cashfree is no longer offered for new checkout orders.
-- Customers may sign in to view account features, but checkout does not require an account. Guest payment links use unguessable, single-order access tokens. Admin checks use the trusted JWT `app_metadata.role` claim and are repeated for each admin API request.
+- Customers may sign in to view account features, but checkout does not require an account. Admin checks use the trusted JWT `app_metadata.role` claim and are repeated for each admin API request.
 - WhatsApp hamper submissions are saved as enquiries and are never treated as paid orders.
 
 ## Production checklist
 
 - Configure production Supabase credentials in Vercel environment variables.
-- For an existing Supabase project, apply [`supabase/migrations/20261115161200_manual_upi_payments.sql`](./supabase/migrations/20261115161200_manual_upi_payments.sql) before deploying manual UPI checkout.
+- For an existing Supabase project, apply [`supabase/migrations/20261123130000_whatsapp_order_photos.sql`](./supabase/migrations/20261123130000_whatsapp_order_photos.sql) before enabling customer photo uploads.
 - Apply [`supabase/migrations/20261116100000_guest_checkout.sql`](./supabase/migrations/20261116100000_guest_checkout.sql) to an existing project to allow guest-created orders.
 - Apply [`supabase/migrations/20261116130000_manage_box_colours.sql`](./supabase/migrations/20261116130000_manage_box_colours.sql) to an existing project to manage hamper colours from the admin dashboard.
-- Set the UPI ID and upload the merchant QR in `/admin/settings` after the migration is applied.
 - Set `NEXT_PUBLIC_SITE_URL` to the canonical HTTPS deployment URL.
 - Review legal policies, shipping charges, delivery estimates, and refund terms for the actual business.
 - Create active categories and products in `/admin`; add available hamper colours in `/admin/box-colours`.
-- Test account confirmation, admin access, image upload, stock validation, manual UPI order-note matching and admin verification, order fulfilment, WhatsApp deep-links, and mobile layouts against the configured services.
+- Test account confirmation, admin access, image upload, stock validation, WhatsApp order requests, order fulfilment, and mobile layouts against the configured services.
 
 `npm run build` and `npm run typecheck` validate the app source. A live payment, authenticated admin workflow, or Storage upload cannot be truthfully integration-tested until project credentials are supplied.

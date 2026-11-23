@@ -49,8 +49,6 @@ export type StoreSettings = {
   instagram_url: string;
   shipping_charge: number;
   free_shipping_threshold: number;
-  upi_id: string;
-  upi_qr_url: string | null;
   announcement: string;
   social_links: Record<string, string>;
 };

@@ -42,8 +42,6 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     instagram_url: data?.instagram_url ?? "",
     shipping_charge: Number(data?.shipping_charge ?? 60),
     free_shipping_threshold: Number(data?.free_shipping_threshold ?? 999),
-    upi_id: data?.upi_id ?? "",
-    upi_qr_url: data?.upi_qr_url ?? null,
     announcement: data?.announcement ?? "Little gifts, big surprises.",
     social_links: data?.social_links ?? {},
   };
