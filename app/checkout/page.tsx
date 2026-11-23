@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useCart } from "@/components/store-provider";
 import { rememberGuestOrder } from "@/lib/guest-order-storage";
+import { StCourierTrackForm } from "@/components/st-courier-track-form";
 
 const maxPhotos = 10;
 const maxPhotoBytes = 350_000;
@@ -262,7 +263,7 @@ export default function CheckoutPage() {
     <section className="summary" aria-live="polite">
       <div className="section-head"><div><h2 style={{ fontSize: 22 }}>Track your order</h2><p className="muted">Order status: {orderStatus || "Checking…"}</p></div><button type="button" className="btn btn-light" disabled={trackingLoading} onClick={() => setTrackingRefresh(current => current + 1)}>{trackingLoading ? "Checking…" : "Refresh tracking"}</button></div>
       <p><b>Order number:</b> {submittedOrderNumber}</p>
-      {trackingNumber ? <p><b>ST Courier tracking number:</b> {trackingNumber}</p> : <p className="muted">The ST Courier tracking number will appear here after your order ships and the store adds it.</p>}
+      {trackingNumber ? <><p><b>ST Courier tracking number:</b> {trackingNumber}</p><StCourierTrackForm trackingNumber={trackingNumber} /></> : <p className="muted">The ST Courier tracking number will appear here after your order ships and the store adds it.</p>}
       {trackingError && <p className="notice" role="alert">{trackingError}</p>}
     </section>
     <a className="btn btn-pink" href={whatsappUrl} target="_blank" rel="noreferrer" onClick={() => { whatsappStartedRef.current = true; }}>{returnedFromWhatsApp ? "Open WhatsApp again" : "Open WhatsApp to send your order"}</a>
