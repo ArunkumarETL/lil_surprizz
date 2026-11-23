@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   }
   const ids = [...new Set(body.data.items.map(item => item.productId))];
   const { data: products, error } = await admin.from("products").select("id,name,price,stock,available,archived").in("id", ids);
-  if (error) return Response.json({ error: "Could not validate hamper items." }, { status: 500 });
+  if (error) return Response.json({ error: "Could not validate selected gift items." }, { status: 500 });
   const byId = new Map((products ?? []).map(product => [product.id, product]));
   let total = 0;
   for (const item of body.data.items) {
@@ -52,6 +52,6 @@ export async function POST(request: Request) {
     }),
     estimated_total: Math.round(total * 100) / 100,
   });
-  if (saveError) return Response.json({ error: "Unable to save your custom hamper enquiry." }, { status: 500 });
+  if (saveError) return Response.json({ error: "Unable to save your custom gift enquiry." }, { status: 500 });
   return Response.json({ saved: true }, { status: 201 });
 }

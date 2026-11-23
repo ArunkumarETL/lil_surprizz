@@ -6,7 +6,7 @@ import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
   title: { default: "LILSURPRIZ | Little gifts, big surprises", template: "%s | LILSURPRIZ" },
-  description: "Thoughtfully curated gift hampers and personalised surprises for every occasion, delivered across India.",
+  description: "Thoughtfully curated gifts and personalised surprises for every occasion, delivered across India.",
   openGraph: { title: "LILSURPRIZ", description: "Little gifts, big surprises.", type: "website" },
 };
 

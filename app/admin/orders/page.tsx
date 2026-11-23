@@ -40,7 +40,7 @@ export default async function AdminOrdersPage() {
       <td>{order.customers?.full_name || address?.name || "—"}<br />{order.customers?.email}<br />{order.customers?.phone || address?.phone}</td>
       <td>
         {order.order_items.map((i: { product_name: string; quantity: number }) => `${i.product_name} ×${i.quantity}`).join(", ")}
-        {custom && <details><summary>Custom hamper details</summary><dl>
+        {custom && <details><summary>Custom gift details</summary><dl>
           {custom.recipient && <div><dt>Recipient</dt><dd>{custom.recipient}</dd></div>}
           {custom.occasion && <div><dt>Occasion</dt><dd>{custom.occasion}</dd></div>}
           {custom.colour && <div><dt>Box colour</dt><dd>{custom.colour}</dd></div>}

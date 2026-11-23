@@ -32,7 +32,7 @@ export function CustomBuilder({ products, whatsapp, colours }: { products: Produ
     let whatsappUrl = "";
     if (channel === "whatsapp") {
       const lines = selected.map(p => `• ${p.name} × ${quantities[p.id]} — ₹${(p.price * quantities[p.id]).toLocaleString("en-IN")}`).join("\n");
-      const text = `Hi LILSURPRIZ! I'd love a custom hamper.\nRecipient: ${recipient}\nOccasion: ${occasion}\nBox: ${colour}\nItems:\n${lines}\nMessage: ${note || "None"}\nInstructions: ${instructions || "None"}\nEstimated total: ₹${total.toLocaleString("en-IN")}`;
+      const text = `Hi LILSURPRIZ! I'd love a custom gift box.\nRecipient: ${recipient}\nOccasion: ${occasion}\nBox: ${colour}\nItems:\n${lines}\nMessage: ${note || "None"}\nInstructions: ${instructions || "None"}\nEstimated total: ₹${total.toLocaleString("en-IN")}`;
       whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`;
       whatsappWindow = window.open("about:blank", "_blank");
       if (whatsappWindow) whatsappWindow.opener = null;
@@ -41,7 +41,7 @@ export function CustomBuilder({ products, whatsapp, colours }: { products: Produ
       const response = await fetch("/api/custom-enquiries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(details) });
       if (!response.ok) {
         const result = await response.json() as { error?: string };
-        throw new Error(result.error ?? "Could not save your hamper request.");
+        throw new Error(result.error ?? "Could not save your custom gift request.");
       }
       if (channel === "whatsapp") {
         if (whatsappWindow && !whatsappWindow.closed) whatsappWindow.location.href = whatsappUrl;
@@ -60,7 +60,7 @@ export function CustomBuilder({ products, whatsapp, colours }: { products: Produ
   return <div className="split"><div><h2 style={{ fontSize: 24 }}>Pick their little joys</h2>{products.length ? products.map(product => <label key={product.id} className="cart-row" style={{ gridTemplateColumns: "1fr auto", cursor: "pointer" }}>
     <span><b>{product.name}</b><br /><span className="muted">₹{product.price.toLocaleString("en-IN")} · {product.stock} in stock</span></span>
     <span className="quantity"><button type="button" aria-label="Remove one" onClick={e => { e.preventDefault(); setQuantities({ ...quantities, [product.id]: Math.max(0, (quantities[product.id] ?? 0) - 1) }); }}>−</button><b>{quantities[product.id] ?? 0}</b><button type="button" aria-label="Add one" disabled={(quantities[product.id] ?? 0) >= product.stock} onClick={e => { e.preventDefault(); setQuantities({ ...quantities, [product.id]: (quantities[product.id] ?? 0) + 1 }); }}>+</button></span>
-    </label>) : <p className="notice">There are no available hamper items yet. The store can add products in the admin dashboard.</p>}
+    </label>) : <p className="notice">There are no available gift items yet. The store can add products in the admin dashboard.</p>}
     </div><div className="summary"><h2 style={{ fontSize: 24 }}>Make it theirs</h2><div className="form">
       <div className="field"><label>Recipient name</label><input value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Who’s the surprise for?" /></div>
       <div className="field"><label>Occasion</label><select value={occasion} onChange={e => setOccasion(e.target.value)}>{occasions.map(o => <option key={o}>{o}</option>)}</select></div>

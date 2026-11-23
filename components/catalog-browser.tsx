@@ -35,7 +35,7 @@ export function CatalogBrowser({ products }: { products: Product[] }) {
     <div className="catalog-toolbar">
       <label className="catalog-search">
         <span className="sr-only">Search gifts</span>
-        <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search gifts, hampers, and items…" type="search" />
+        <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search gifts and items…" type="search" />
       </label>
       <label className="catalog-sort">
         <span>Sort by</span>
