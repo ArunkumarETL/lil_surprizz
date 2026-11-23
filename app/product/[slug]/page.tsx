@@ -19,7 +19,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const images = product.product_images?.sort((a, b) => a.position - b.position) ?? [];
   return <main className="wrap product-detail">
     <ProductGallery name={product.name} images={images} />
-    <div className="details"><span className="eyebrow">{product.category?.name ?? "Thoughtfully curated"}</span><h1 style={{ fontSize: 40, margin: "10px 0" }}>{product.name}</h1>
+    <div className="details"><h1 style={{ fontSize: 40, margin: "10px 0" }}>{product.name}</h1>
       <div className="price">₹{product.price.toLocaleString("en-IN")}{product.compare_at_price && product.compare_at_price > product.price ? <span className="old-price">₹{product.compare_at_price.toLocaleString("en-IN")}</span> : null}</div>
       <p style={{ marginTop: 18 }}>{product.description}</p>
       {product.hamper_items.length > 0 && <><h3>Inside your box</h3><ul>{product.hamper_items.map(item => <li key={item}>{item}</li>)}</ul></>}

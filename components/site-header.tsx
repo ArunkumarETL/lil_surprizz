@@ -29,7 +29,7 @@ export function SiteHeader() {
       setIsAdmin(false);
     }
   }, []);
-  const links = [["Shop", "/shop"], ["Girls", "/collections/girls"], ["Boys", "/collections/boys"], ["Customise", "/customise"], ["Our story", "/about"]];
+  const links = [["Shop all", "/shop"], ["Customise", "/customise"], ["Our story", "/about"]];
   return <>
     <div className="announcement">{announcement}</div>
     <header className="header"><nav className="nav">
