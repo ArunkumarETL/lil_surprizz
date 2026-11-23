@@ -129,6 +129,17 @@ export async function POST(request: Request) {
     uploadedPaths.push(path);
   }
 
+  const signedPhotoUrls: string[] = [];
+  for (const path of uploadedPaths) {
+    const { data, error } = await admin.storage.from(photoBucket).createSignedUrl(path, 60 * 60 * 24 * 7);
+    if (error || !data?.signedUrl) {
+      await removeCustomerPhotos(admin, uploadedPaths);
+      console.error("Unable to create secure link for customer order photo", error?.message ?? "Missing signed URL.");
+      return Response.json({ error: "Unable to prepare your photos for WhatsApp. Please try again." }, { status: 503 });
+    }
+    signedPhotoUrls.push(data.signedUrl);
+  }
+
   const { data: orderId, error: orderError } = await admin.rpc("create_manual_upi_order", {
     p_customer_id: user?.id ?? null,
     p_order_number: orderNumber,
@@ -178,22 +189,15 @@ export async function POST(request: Request) {
     `Delivery: ${shipping ? `₹${shipping.toLocaleString("en-IN")}` : "Free"}`,
     ...(discount ? [`Discount${couponCode ? ` (${couponCode})` : ""}: ₹${discount.toLocaleString("en-IN")}`] : []),
     `Estimated total: ₹${total.toLocaleString("en-IN")}`,
+    ...(signedPhotoUrls.length ? [`Customer photos:\n${signedPhotoUrls.join("\n")}`] : []),
     "Please confirm availability and share payment instructions. Items are held for 30 minutes. I have not paid yet.",
   ];
-  const message = [
-    ...orderMessageLines,
-    ...(uploadedPaths.length ? ["Customer photos are saved with this order request. Use the share button to attach them."] : []),
-  ].join("\n");
-  const whatsappShareText = [
-    ...orderMessageLines,
-    ...(uploadedPaths.length ? ["Customer photos are attached."] : []),
-  ].join("\n");
+  const message = orderMessageLines.join("\n");
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
   return Response.json({
     orderId,
     orderNumber,
     whatsappUrl,
-    whatsappShareText,
     ...(guestAccess ? { accessToken: guestAccess.token } : {}),
   }, { headers: { "Cache-Control": "no-store" } });
 }
