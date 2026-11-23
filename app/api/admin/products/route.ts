@@ -18,7 +18,6 @@ const productSchema = z.object({
   available: z.boolean(),
   featured: z.boolean(),
   new_arrival: z.boolean(),
-  customizable: z.boolean(),
   image_urls: z.array(z.string().url()).max(12),
 });
 
@@ -33,7 +32,7 @@ export async function POST(request: Request) {
   const { data: product, error } = await db.from("products").insert({
     name: data.name, slug: slugify(data.name), sku: data.sku, description: data.description, category_id: data.category_id,
     price: data.price, compare_at_price: data.compare_at_price, stock: data.stock, features: data.features, hamper_items: data.hamper_items,
-    size: data.size, weight_grams: data.weight_grams, available: data.available, featured: data.featured, new_arrival: data.new_arrival, customizable: data.customizable,
+    size: data.size, weight_grams: data.weight_grams, available: data.available, featured: data.featured, new_arrival: data.new_arrival,
   }).select("id").single();
   if (error || !product) return Response.json({ error: error?.code === "23505" ? "Product name or SKU already exists." : "Unable to save product." }, { status: 400 });
   const { error: imageError } = await db.from("product_images").insert(data.image_urls.map((image_url, position) => ({ product_id: product.id, image_url, position, alt_text: data.name })));
@@ -53,7 +52,7 @@ export async function PATCH(request: Request) {
   const { error } = await db.from("products").update({
     name: data.name, slug: slugify(data.name), sku: data.sku, description: data.description, category_id: data.category_id,
     price: data.price, compare_at_price: data.compare_at_price, stock: data.stock, features: data.features, hamper_items: data.hamper_items,
-    size: data.size, weight_grams: data.weight_grams, available: data.available, featured: data.featured, new_arrival: data.new_arrival, customizable: data.customizable, updated_at: new Date().toISOString(),
+    size: data.size, weight_grams: data.weight_grams, available: data.available, featured: data.featured, new_arrival: data.new_arrival, updated_at: new Date().toISOString(),
   }).eq("id", data.id);
   if (error) return Response.json({ error: error.code === "23505" ? "Product name or SKU already exists." : "Unable to update product." }, { status: 400 });
   const { error: removeError } = await db.from("product_images").delete().eq("product_id", data.id);

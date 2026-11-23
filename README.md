@@ -13,12 +13,10 @@ Mobile-first ecommerce application built with Next.js and Supabase.
 ## Features
 
 - Product, category, stock, price, image, and settings management is backed by Supabase.
-- Active hamper box colours are managed in `/admin/box-colours` and appear automatically in the custom hamper builder.
 - Product and logo images are stored in the `product-images` Storage bucket. Product images are resized to a 1600px maximum dimension and WebP-encoded in the browser.
 - Orders are re-priced and stock-checked on the server. Customers can submit an order request as guests with delivery details and optional product photos. Checkout does not take payment; customers review and send the prepared order details in WhatsApp, and the store arranges payment directly.
 - Existing Cashfree orders can still be reconciled through the payment webhook; Cashfree is no longer offered for new checkout orders.
 - Customers may sign in to view account features, but checkout does not require an account. Admin checks use the trusted JWT `app_metadata.role` claim and are repeated for each admin API request.
-- WhatsApp hamper submissions are saved as enquiries and are never treated as paid orders.
 
 ## Production checklist
 
@@ -26,10 +24,9 @@ Mobile-first ecommerce application built with Next.js and Supabase.
 - For an existing Supabase project, apply [`supabase/migrations/20261123130000_whatsapp_order_photos.sql`](./supabase/migrations/20261123130000_whatsapp_order_photos.sql) before enabling customer photo uploads.
 - Apply [`supabase/migrations/20261123131000_set_whatsapp_order_number.sql`](./supabase/migrations/20261123131000_set_whatsapp_order_number.sql) and [`supabase/migrations/20261123132500_allow_whatsapp_order_requests.sql`](./supabase/migrations/20261123132500_allow_whatsapp_order_requests.sql) to configure the WhatsApp destination and allow WhatsApp orders without a payment reference.
 - Apply [`supabase/migrations/20261116100000_guest_checkout.sql`](./supabase/migrations/20261116100000_guest_checkout.sql) to an existing project to allow guest-created orders.
-- Apply [`supabase/migrations/20261116130000_manage_box_colours.sql`](./supabase/migrations/20261116130000_manage_box_colours.sql) to an existing project to manage hamper colours from the admin dashboard.
 - Set `NEXT_PUBLIC_SITE_URL` to the canonical HTTPS deployment URL.
 - Review legal policies, shipping charges, delivery estimates, and refund terms for the actual business.
-- Create active categories and products in `/admin`; add available hamper colours in `/admin/box-colours`.
+- Create active categories and products in `/admin`.
 - Test account confirmation, admin access, image upload, stock validation, WhatsApp order requests, order fulfilment, and mobile layouts against the configured services.
 
 `npm run build` and `npm run typecheck` validate the app source. A live payment, authenticated admin workflow, or Storage upload cannot be truthfully integration-tested until project credentials are supplied.

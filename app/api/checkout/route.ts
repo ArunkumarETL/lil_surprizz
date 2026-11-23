@@ -20,13 +20,6 @@ const requestSchema = z.object({
   state: z.string().trim().min(2).max(80),
   pincode: z.string().regex(/^\d{6}$/),
   coupon: z.string().trim().max(40).optional(),
-  customization: z.object({
-    recipient: z.string().trim().min(1).max(100),
-    occasion: z.string().trim().min(1).max(80),
-    colour: z.string().trim().min(1).max(60),
-    note: z.string().max(500),
-    instructions: z.string().max(1000),
-  }).optional(),
 });
 
 async function removeCustomerPhotos(admin: ReturnType<typeof createAdminClient>, paths: string[]) {
@@ -150,7 +143,7 @@ export async function POST(request: Request) {
       ...(guestAccess ? { guest_access_token_hash: guestAccess.tokenHash } : {}),
     },
     p_shipping_address: { name: parsed.data.name, phone: parsed.data.phone, email: parsed.data.email || null, address: parsed.data.address, city: parsed.data.city, state: parsed.data.state, pincode: parsed.data.pincode },
-    p_custom_details: parsed.data.customization ?? null,
+    p_custom_details: null,
     p_items: orderLines.map(line => ({ product_id: line.product_id, quantity: line.quantity, unit_price: line.unit_price })),
   });
   if (orderError || !orderId) {
@@ -185,7 +178,6 @@ export async function POST(request: Request) {
     `Delivery: ${shipping ? `₹${shipping.toLocaleString("en-IN")}` : "Free"}`,
     ...(discount ? [`Discount${couponCode ? ` (${couponCode})` : ""}: ₹${discount.toLocaleString("en-IN")}`] : []),
     `Estimated total: ₹${total.toLocaleString("en-IN")}`,
-    ...(parsed.data.customization ? [`Customization: ${messageText(parsed.data.customization.recipient)} · ${messageText(parsed.data.customization.occasion)} · ${messageText(parsed.data.customization.colour)}`, parsed.data.customization.note ? `Message: ${messageText(parsed.data.customization.note)}` : "", parsed.data.customization.instructions ? `Instructions: ${messageText(parsed.data.customization.instructions)}` : ""].filter(Boolean) : []),
     "Please confirm availability and share payment instructions. Items are held for 30 minutes. I have not paid yet.",
   ];
   const message = [

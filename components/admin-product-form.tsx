@@ -8,7 +8,7 @@ import type { Category, Product } from "@/lib/types";
 type Props = { categories: Category[]; product?: Product };
 type ProductFormState = {
   name: string; sku: string; description: string; category_id: string; price: string; compare_at_price: string; stock: string;
-  features: string; hamper_items: string; size: string; weight_grams: string; available: boolean; featured: boolean; new_arrival: boolean; customizable: boolean;
+  features: string; hamper_items: string; size: string; weight_grams: string; available: boolean; featured: boolean; new_arrival: boolean;
 };
 
 async function optimizeImage(file: File) {
@@ -29,7 +29,7 @@ export function AdminProductForm({ categories, product }: Props) {
     name: product?.name ?? "", sku: product?.sku ?? "", description: product?.description ?? "", category_id: product?.category_id ?? "",
     price: String(product?.price ?? ""), compare_at_price: product?.compare_at_price ? String(product.compare_at_price) : "", stock: String(product?.stock ?? 0),
     features: (product?.features ?? []).join("\n"), hamper_items: (product?.hamper_items ?? []).join("\n"), size: product?.size ?? "", weight_grams: product?.weight_grams ? String(product.weight_grams) : "",
-    available: product?.available ?? true, featured: product?.featured ?? false, new_arrival: product?.new_arrival ?? false, customizable: product?.customizable ?? false,
+    available: product?.available ?? true, featured: product?.featured ?? false, new_arrival: product?.new_arrival ?? false,
   });
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -65,7 +65,7 @@ export function AdminProductForm({ categories, product }: Props) {
         price: Number(form.price), compare_at_price: form.compare_at_price ? Number(form.compare_at_price) : null, stock: Number(form.stock),
         features: form.features.split("\n").map(v => v.trim()).filter(Boolean), hamper_items: form.hamper_items.split("\n").map(v => v.trim()).filter(Boolean),
         size: form.size || null, weight_grams: form.weight_grams ? Number(form.weight_grams) : null,
-        available: form.available, featured: form.featured, new_arrival: form.new_arrival, customizable: form.customizable, image_urls: imageUrls,
+        available: form.available, featured: form.featured, new_arrival: form.new_arrival, image_urls: imageUrls,
       };
       const response = await fetch("/api/admin/products", { method: product ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const result = await response.json() as { error?: string };
@@ -74,7 +74,7 @@ export function AdminProductForm({ categories, product }: Props) {
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to save product."); setBusy(false); }
   }
 
-  const fields: Array<[keyof ProductFormState, string]> = [["available", "Available for sale"], ["featured", "Featured product"], ["new_arrival", "New arrival"], ["customizable", "Allow customisation"]];
+  const fields: Array<[keyof ProductFormState, string]> = [["available", "Available for sale"], ["featured", "Featured product"], ["new_arrival", "New arrival"]];
   return <form className="form" onSubmit={save}>
     <div className="form-grid">
       <div className="field"><label>Product name *</label><input required maxLength={150} value={form.name} onChange={e => update("name", e.target.value)} /></div>

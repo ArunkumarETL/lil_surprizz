@@ -49,7 +49,6 @@ export default function CheckoutPage() {
   const [coupon, setCoupon] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null);
   const [delivery, setDelivery] = useState({ shipping_charge: 60, free_shipping_threshold: 999 });
-  const [customization, setCustomization] = useState<Record<string, unknown> | undefined>();
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<{ name: string; url: string }[]>([]);
   const photoUrls = useRef<string[]>([]);
@@ -75,11 +74,7 @@ export default function CheckoutPage() {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem("lilsurpriz-customization");
-    if (saved) {
-      try { setCustomization(JSON.parse(saved) as Record<string, unknown>); }
-      catch { localStorage.removeItem("lilsurpriz-customization"); }
-    }
+    localStorage.removeItem("lilsurpriz-customization");
     return () => photoUrls.current.forEach(url => URL.revokeObjectURL(url));
   }, []);
 
@@ -129,7 +124,6 @@ export default function CheckoutPage() {
         items: items.map(item => ({ productId: item.product.id, quantity: item.quantity })),
         ...form,
         coupon: coupon || undefined,
-        customization,
       }));
       const optimizedPhotos = await Promise.all(photos.map(optimizePhoto));
       for (const photo of optimizedPhotos) body.append("photos", photo);
@@ -148,7 +142,6 @@ export default function CheckoutPage() {
         }
       }
       clear();
-      localStorage.removeItem("lilsurpriz-customization");
       setSubmittedOrder(result.orderNumber);
       setWhatsappUrl(result.whatsappUrl);
       setWhatsappShareText(result.whatsappShareText);
