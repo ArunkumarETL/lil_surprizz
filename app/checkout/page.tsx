@@ -27,7 +27,7 @@ async function optimizePhoto(file: File) {
       const context = canvas.getContext("2d");
       if (!context) throw new Error("Photo resizing is not supported in this browser.");
       context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      return new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/webp", quality));
+      return new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", quality));
     };
 
     let blob: Blob | null = null;
@@ -37,7 +37,7 @@ async function optimizePhoto(file: File) {
       if (blob.size <= maxPhotoBytes) break;
     }
     if (!blob || blob.size > maxPhotoBytes) throw new Error(`${file.name} is too large after resizing. Please choose another photo.`);
-    return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.webp`, { type: "image/webp", lastModified: Date.now() });
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
   } finally {
     bitmap.close();
   }
@@ -58,6 +58,9 @@ export default function CheckoutPage() {
   const [message, setMessage] = useState("");
   const [submittedOrder, setSubmittedOrder] = useState("");
   const [whatsappUrl, setWhatsappUrl] = useState("");
+  const [whatsappShareText, setWhatsappShareText] = useState("");
+  const [sharePhotos, setSharePhotos] = useState<File[]>([]);
+  const [shareError, setShareError] = useState("");
   const [recoveryWarning, setRecoveryWarning] = useState("");
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const shipping = Math.max(0, subtotal - (appliedCoupon?.discount ?? 0)) >= delivery.free_shipping_threshold ? 0 : delivery.shipping_charge;
@@ -120,8 +123,6 @@ export default function CheckoutPage() {
     setBusy(true);
     setError("");
     setMessage("");
-    const whatsappWindow = window.open("about:blank", "_blank");
-    if (whatsappWindow) whatsappWindow.opener = null;
     try {
       const body = new FormData();
       body.set("order", JSON.stringify({
@@ -130,11 +131,12 @@ export default function CheckoutPage() {
         coupon: coupon || undefined,
         customization,
       }));
-      for (const photo of photos) body.append("photos", await optimizePhoto(photo));
+      const optimizedPhotos = await Promise.all(photos.map(optimizePhoto));
+      for (const photo of optimizedPhotos) body.append("photos", photo);
 
       const response = await fetch("/api/checkout", { method: "POST", body });
-      const result = await response.json() as { whatsappUrl?: string; orderId?: string; orderNumber?: string; accessToken?: string; error?: string };
-      if (!response.ok || !result.whatsappUrl || !result.orderId || !result.orderNumber) {
+      const result = await response.json() as { whatsappUrl?: string; whatsappShareText?: string; orderId?: string; orderNumber?: string; accessToken?: string; error?: string };
+      if (!response.ok || !result.whatsappUrl || !result.whatsappShareText || !result.orderId || !result.orderNumber) {
         throw new Error(result.error ?? "Unable to submit your order request.");
       }
 
@@ -149,13 +151,39 @@ export default function CheckoutPage() {
       localStorage.removeItem("lilsurpriz-customization");
       setSubmittedOrder(result.orderNumber);
       setWhatsappUrl(result.whatsappUrl);
-      setMessage("Your order request is saved. Review the details in WhatsApp and tap Send to contact us.");
-      if (whatsappWindow) whatsappWindow.location.href = result.whatsappUrl;
+      setWhatsappShareText(result.whatsappShareText);
+      setSharePhotos(optimizedPhotos);
+      setMessage("Your order request is saved. Choose WhatsApp in the share menu, select our chat, and tap Send.");
+      photoPreviews.forEach(photo => URL.revokeObjectURL(photo.url));
+      photoUrls.current = [];
+      setPhotos([]);
+      setPhotoPreviews([]);
     } catch (e) {
-      whatsappWindow?.close();
       setError(e instanceof Error ? e.message : "Unable to submit your order request.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function shareOrder() {
+    setShareError("");
+    const canShareFiles = sharePhotos.length > 0
+      && typeof navigator.canShare === "function"
+      && navigator.canShare({ files: sharePhotos });
+    if (typeof navigator.share !== "function" || (sharePhotos.length > 0 && !canShareFiles)) {
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title: `LILSURPRIZ order ${submittedOrder}`,
+        text: whatsappShareText,
+        ...(sharePhotos.length ? { files: sharePhotos } : {}),
+      });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      setShareError("Could not open the photo share menu. Use the WhatsApp link option below instead.");
     }
   }
 
@@ -171,9 +199,13 @@ export default function CheckoutPage() {
     <span className="eyebrow">Order request saved</span><h1 style={{ fontSize: 44 }}>Almost done</h1>
     <div className="notice success" role="status">{message}</div>
     <p><b>Order number:</b> {submittedOrder}</p>
-    <p className="muted">No payment has been taken. If WhatsApp did not open, use the button below, review the prepared message, and tap Send. Photo links are included; WhatsApp does not attach or send photos automatically. Items are held for 30 minutes.</p>
+    <p className="muted">No payment has been taken. Share the order details and selected photos from your phone, then choose WhatsApp and our chat. You must tap Send in WhatsApp. If photo sharing is unsupported on your device, use the link option below. Items are held for 30 minutes.</p>
     {recoveryWarning && <p className="notice" role="status">{recoveryWarning}</p>}
-    <a className="btn btn-pink" href={whatsappUrl} target="_blank" rel="noreferrer">Open WhatsApp to send your request</a>
+    {shareError && <p className="notice" role="alert">{shareError}</p>}
+    <button className="btn btn-pink" type="button" onClick={shareOrder}>Share order{sharePhotos.length ? " and photos" : ""} to WhatsApp</button>
+    <p className="muted">Your phone will ask you to choose WhatsApp and the recipient; this website cannot select the chat or send without your confirmation.</p>
+    <p className="muted">The fallback WhatsApp link contains order details only; it does not attach photos.</p>
+    <a className="text-link" href={whatsappUrl} target="_blank" rel="noreferrer">Open WhatsApp with order details only</a>
     <p style={{ marginTop: 20 }}><Link className="text-link" href="/shop">Continue shopping</Link></p>
   </main>;
 
@@ -187,11 +219,11 @@ export default function CheckoutPage() {
       <div className="field"><label htmlFor="checkout-address">Address</label><textarea id="checkout-address" required maxLength={300} value={form.address} onChange={event => setForm({ ...form, address: event.target.value })} /></div>
       <div className="form-grid"><div className="field"><label htmlFor="checkout-city">City</label><input id="checkout-city" required maxLength={80} value={form.city} onChange={event => setForm({ ...form, city: event.target.value })} /></div><div className="field"><label htmlFor="checkout-state">State</label><input id="checkout-state" required maxLength={80} value={form.state} onChange={event => setForm({ ...form, state: event.target.value })} /></div></div>
       <div className="field"><label htmlFor="checkout-pincode">PIN code</label><input id="checkout-pincode" required inputMode="numeric" pattern="[0-9]{6}" value={form.pincode} onChange={event => setForm({ ...form, pincode: event.target.value })} /></div>
-      <div className="field"><label htmlFor="checkout-photos">Add multiple photos</label><input id="checkout-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={event => { addPhotos(event.target.files); event.currentTarget.value = ""; }} /><small className="muted">Select up to {maxPhotos} photos to include with your WhatsApp order request. We resize them and include private links that expire after 7 days. WhatsApp will not attach or send the photos automatically.</small>
+      <div className="field"><label htmlFor="checkout-photos">Add multiple photos</label><input id="checkout-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={event => { addPhotos(event.target.files); event.currentTarget.value = ""; }} /><small className="muted">Select up to {maxPhotos} photos to share with your WhatsApp order request. We resize them before saving.</small>
         {photoPreviews.length > 0 && <div className="file-preview">{photoPreviews.map((photo, index) => <div key={photo.url} style={{ position: "relative" }}><img src={photo.url} alt={`Selected photo ${index + 1}: ${photo.name}`} /><button type="button" aria-label={`Remove ${photo.name}`} onClick={() => removePhoto(index)}>×</button></div>)}</div>}
       </div>
       <div className="field"><label htmlFor="checkout-coupon">Coupon code (optional)</label><div style={{ display: "flex", gap: 8 }}><input id="checkout-coupon" value={coupon} onChange={event => { setCoupon(event.target.value.toUpperCase()); setAppliedCoupon(null); }} /><button type="button" className="btn btn-light" onClick={applyCoupon}>Apply</button></div>{appliedCoupon && <small className="muted">{appliedCoupon.code} applied.</small>}</div>
-      <div className="summary"><h2 style={{ fontSize: 20 }}>Send your order request</h2><p className="muted">Your order details and photo links will be prepared in WhatsApp. Review the message and tap Send. We’ll confirm availability and arrange payment with you directly; no payment is taken here. Items are held for 30 minutes.</p></div>
+      <div className="summary"><h2 style={{ fontSize: 20 }}>Send your order request</h2><p className="muted">After saving your request, share the details and photos from your phone, choose WhatsApp and our chat, then tap Send. We’ll confirm availability and arrange payment with you directly; no payment is taken here. Items are held for 30 minutes.</p></div>
       {error && <div className="notice" role="alert">{error}</div>}
       <button className="btn btn-pink" disabled={busy}>{busy ? "Saving order and photos…" : "Submit order request on WhatsApp"}</button>
     </form><div className="summary"><h2 style={{ fontSize: 24 }}>Your order</h2>{items.map(item => <div key={item.product.id} className="summary-line"><span>{item.product.name} × {item.quantity}</span><b>₹{(item.product.price * item.quantity).toLocaleString("en-IN")}</b></div>)}<div className="summary-line"><span>Subtotal</span><b>₹{subtotal.toLocaleString("en-IN")}</b></div>{appliedCoupon && <div className="summary-line"><span>Discount ({appliedCoupon.code})</span><b>− ₹{appliedCoupon.discount.toLocaleString("en-IN")}</b></div>}<div className="summary-line"><span>Delivery</span><b>{shipping ? `₹${shipping.toLocaleString("en-IN")}` : "Free"}</b></div><div className="summary-line total"><span>Estimated total</span><b>₹{estimatedTotal.toLocaleString("en-IN")}</b></div></div></div>

@@ -136,17 +136,6 @@ export async function POST(request: Request) {
     uploadedPaths.push(path);
   }
 
-  const signedPhotoUrls: string[] = [];
-  for (const path of uploadedPaths) {
-    const { data, error } = await admin.storage.from(photoBucket).createSignedUrl(path, 60 * 60 * 24 * 7);
-    if (error || !data?.signedUrl) {
-      await removeCustomerPhotos(admin, uploadedPaths);
-      console.error("Unable to create secure link for customer order photo", error?.message ?? "Missing signed URL.");
-      return Response.json({ error: "Unable to prepare your photos for WhatsApp. Please try again." }, { status: 503 });
-    }
-    signedPhotoUrls.push(data.signedUrl);
-  }
-
   const { data: orderId, error: orderError } = await admin.rpc("create_manual_upi_order", {
     p_customer_id: user?.id ?? null,
     p_order_number: orderNumber,
@@ -185,7 +174,7 @@ export async function POST(request: Request) {
 
   const itemSummary = orderLines.map(line => `${line.quantity} × ${messageText(line.product_name)} (₹${(line.unit_price * line.quantity).toLocaleString("en-IN")})`).join("\n");
   const address = [parsed.data.address, parsed.data.city, parsed.data.state, parsed.data.pincode].map(messageText).join(", ");
-  const message = [
+  const orderMessageLines = [
     `Hi LILSURPRIZ, I'd like to place order request ${orderNumber}.`,
     `Name: ${messageText(parsed.data.name)}`,
     `Phone: ${parsed.data.phone}`,
@@ -196,15 +185,23 @@ export async function POST(request: Request) {
     `Delivery: ${shipping ? `₹${shipping.toLocaleString("en-IN")}` : "Free"}`,
     ...(discount ? [`Discount${couponCode ? ` (${couponCode})` : ""}: ₹${discount.toLocaleString("en-IN")}`] : []),
     `Estimated total: ₹${total.toLocaleString("en-IN")}`,
-    ...(signedPhotoUrls.length ? [`Photo lamp images:\n${signedPhotoUrls.join("\n")}`] : []),
     ...(parsed.data.customization ? [`Customization: ${messageText(parsed.data.customization.recipient)} · ${messageText(parsed.data.customization.occasion)} · ${messageText(parsed.data.customization.colour)}`, parsed.data.customization.note ? `Message: ${messageText(parsed.data.customization.note)}` : "", parsed.data.customization.instructions ? `Instructions: ${messageText(parsed.data.customization.instructions)}` : ""].filter(Boolean) : []),
     "Please confirm availability and share payment instructions. Items are held for 30 minutes. I have not paid yet.",
+  ];
+  const message = [
+    ...orderMessageLines,
+    ...(uploadedPaths.length ? ["Customer photos are saved with this order request. Use the share button to attach them."] : []),
+  ].join("\n");
+  const whatsappShareText = [
+    ...orderMessageLines,
+    ...(uploadedPaths.length ? ["Customer photos are attached."] : []),
   ].join("\n");
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
   return Response.json({
     orderId,
     orderNumber,
     whatsappUrl,
+    whatsappShareText,
     ...(guestAccess ? { accessToken: guestAccess.token } : {}),
   }, { headers: { "Cache-Control": "no-store" } });
 }
