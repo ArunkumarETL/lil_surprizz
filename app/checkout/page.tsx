@@ -267,6 +267,7 @@ export default function CheckoutPage() {
       {trackingError && <p className="notice" role="alert">{trackingError}</p>}
     </section>
     <a className="btn btn-pink" href={whatsappUrl} target="_blank" rel="noreferrer" onClick={() => { whatsappStartedRef.current = true; }}>{returnedFromWhatsApp ? "Open WhatsApp again" : "Open WhatsApp to send your order"}</a>
+    <p style={{ marginTop: 20 }}><Link className="text-link" href="/orders">View your orders and track later</Link></p>
     <p style={{ marginTop: 20 }}><Link className="text-link" href="/shop">Continue shopping</Link></p>
   </main>;
 
