@@ -1,15 +1,12 @@
-import Link from "next/link";
-import { ProductCard } from "@/components/product-card";
+import { CatalogBrowser } from "@/components/catalog-browser";
 import { getProducts } from "@/lib/catalog";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const products = await getProducts({ featured: true, limit: 4 });
+  const products = await getProducts();
   return <main>
-    <section className="section" style={{ background: "#fffafd" }}><div className="wrap"><div className="section-head"><div><span className="eyebrow">A few lovely picks</span><h2>Explore our gifts</h2></div><Link className="text-link" href="/shop">Browse all gifts →</Link></div>
-      {products.length ? <div className="grid">{products.map(product => <ProductCard key={product.id} product={product} />)}</div> : <p className="muted">No featured gifts just yet. Check back soon or browse the full shop.</p>}
-    </div></section>
-    <section className="section wrap"><div className="banner"><span className="eyebrow">Your gift, your way</span><h2>Dream it. We’ll wrap it.</h2><p>Choose the little things they love, add your own note, and create a gift that feels like them.</p><Link className="btn" href="/customise">Build your surprise</Link></div></section>
+    <div className="page-head"><div className="wrap"><span className="eyebrow">Find your perfect surprise</span><h1 style={{ fontSize: 44, margin: "9px 0" }}>All products</h1><p>Browse every available gift in one place.</p></div></div>
+    <section className="section wrap"><CatalogBrowser products={products} /></section>
   </main>;
 }
