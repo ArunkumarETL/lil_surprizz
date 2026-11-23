@@ -46,10 +46,11 @@ export default async function AdminOrdersPage() {
     if (photosError || photoUrls.length !== photoPaths.length) throw new Error(`Unable to load customer photos for order ${order.order_number}.`);
     return { order, photoUrls };
   }));
-  return <><span className="eyebrow">From their door to yours</span><h1 style={{ fontSize: 38 }}>Orders</h1><div className="table-scroll"><table className="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Status & tracking</th></tr></thead><tbody>{orders.map(({ order, photoUrls }) => {
+  return <><span className="eyebrow">From their door to yours</span><h1 style={{ fontSize: 38 }}>Orders</h1><div className="table-scroll"><table className="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Status & tracking</th></tr></thead><tbody>{orders.map(({ order, photoUrls }) => {
     const address = order.shipping_address as { name?: string; phone?: string; email?: string } | null;
     const custom = readCustomOrderDetails(order.custom_details);
     const whatsappOrder = (order.payment_details as { payment_flow?: unknown } | null)?.payment_flow === "whatsapp";
+    const fulfillmentAllowed = whatsappOrder || order.payment_status === "paid";
     return <tr key={order.id}>
       <td>{order.order_number}<br /><small>ID: {order.id}</small><br /><small>{new Date(order.created_at).toLocaleDateString("en-IN")}</small></td>
       <td>{order.customers?.full_name || address?.name || "—"}<br />{order.customers?.email || address?.email}<br />{order.customers?.phone || address?.phone}</td>
@@ -65,8 +66,7 @@ export default async function AdminOrdersPage() {
         </dl></details>}
       </td>
       <td>₹{Number(order.total).toLocaleString("en-IN")}</td>
-      <td>{order.payment_status}<br /><small>{whatsappOrder ? "WhatsApp order" : order.payment_method === "manual_upi" ? "Direct payment" : "Cashfree"}</small>{order.payment_reference_code && <><br /><small>Payment reference: {order.payment_reference_code}</small></>}{order.payment_claim_reference && <><br /><small>Customer-reported UTR: {order.payment_claim_reference}</small></>}{order.payment_reference && <><br /><small>{order.payment_method === "manual_upi" ? "Verified payment reference" : "Cashfree reference"}: {order.payment_reference}</small></>}{order.payment_verified_at && <><br /><small>Verified: {new Date(order.payment_verified_at).toLocaleString("en-IN")}</small></>}{order.payment_verified_by && <><br /><small>Admin user: {order.payment_verified_by}</small></>}</td>
-      <td><AdminOrderActions id={order.id} status={order.order_status} tracking={order.tracking_number} paymentStatus={order.payment_status} paymentMethod={order.payment_method} paymentClaimReference={order.payment_claim_reference} reservationExpired={order.reservation_expired} /></td>
+      <td><AdminOrderActions id={order.id} status={order.order_status} tracking={order.tracking_number} fulfillmentAllowed={fulfillmentAllowed} reservationExpired={order.reservation_expired} /></td>
     </tr>;
   })}</tbody></table></div></>;
 }

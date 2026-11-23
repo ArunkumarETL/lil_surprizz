@@ -56,6 +56,7 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [submittedOrderId, setSubmittedOrderId] = useState("");
+  const [submittedOrderNumber, setSubmittedOrderNumber] = useState("");
   const [guestAccessToken, setGuestAccessToken] = useState("");
   const [whatsappUrl, setWhatsappUrl] = useState("");
   const [orderStatus, setOrderStatus] = useState("");
@@ -224,6 +225,7 @@ export default function CheckoutPage() {
       }
       clear();
       setSubmittedOrderId(result.orderId);
+      setSubmittedOrderNumber(result.orderNumber);
       setGuestAccessToken(result.accessToken ?? "");
       setWhatsappUrl(result.whatsappUrl);
       orderSavedRef.current = true;
@@ -259,6 +261,7 @@ export default function CheckoutPage() {
     {recoveryWarning && <p className="notice" role="status">{recoveryWarning}</p>}
     <section className="summary" aria-live="polite">
       <div className="section-head"><div><h2 style={{ fontSize: 22 }}>Track your order</h2><p className="muted">Order status: {orderStatus || "Checking…"}</p></div><button type="button" className="btn btn-light" disabled={trackingLoading} onClick={() => setTrackingRefresh(current => current + 1)}>{trackingLoading ? "Checking…" : "Refresh tracking"}</button></div>
+      <p><b>Order number:</b> {submittedOrderNumber}</p>
       {trackingNumber ? <p><b>ST Courier tracking number:</b> {trackingNumber}</p> : <p className="muted">The ST Courier tracking number will appear here after your order ships and the store adds it.</p>}
       {trackingError && <p className="notice" role="alert">{trackingError}</p>}
     </section>

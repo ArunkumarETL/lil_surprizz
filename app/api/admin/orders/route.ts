@@ -9,10 +9,17 @@ export async function PATCH(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid order update." }, { status: 400 });
   const db = createAdminClient();
-  const { data: order, error: readError } = await db.from("orders").select("payment_status,order_status").eq("id", parsed.data.id).maybeSingle();
+  const { data: order, error: readError } = await db.from("orders").select("payment_status,order_status,payment_details").eq("id", parsed.data.id).maybeSingle();
   if (readError || !order) return Response.json({ error: "Order not found." }, { status: 404 });
-  if (parsed.data.order_status === "Pending" && (order.payment_status !== "pending" || order.order_status !== "Pending")) return Response.json({ error: "Only an unpaid order can remain pending." }, { status: 409 });
-  if (!["Cancelled", "Pending"].includes(parsed.data.order_status) && order.payment_status !== "paid") return Response.json({ error: "Only a verified paid order can move to fulfilment." }, { status: 409 });
+  const paymentDetails = order.payment_details as { payment_flow?: unknown } | null;
+  const whatsappOrder = paymentDetails?.payment_flow === "whatsapp";
+  if (parsed.data.order_status === "Paid" && order.order_status !== "Paid") {
+    return Response.json({ error: "Payment is not managed through order status." }, { status: 409 });
+  }
+  if (!whatsappOrder) {
+    if (parsed.data.order_status === "Pending" && (order.payment_status !== "pending" || order.order_status !== "Pending")) return Response.json({ error: "Only an unpaid order can remain pending." }, { status: 409 });
+    if (!["Cancelled", "Pending"].includes(parsed.data.order_status) && order.payment_status !== "paid") return Response.json({ error: "Only a verified paid order can move to fulfilment." }, { status: 409 });
+  }
   if (parsed.data.order_status === "Cancelled") {
     const { error } = await db.rpc("cancel_order_and_release_stock", {
       p_order_id: parsed.data.id,
