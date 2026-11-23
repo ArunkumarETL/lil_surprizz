@@ -31,7 +31,7 @@ export function AdminOrderActions({ id, status, tracking, paymentStatus, payment
     : status === "Cancelled" ? ["Cancelled"] : ["Pending", "Cancelled"];
   return <div style={{ display: "grid", gap: 6, minWidth: 150 }}>
     <select value={nextStatus} onChange={e => setNextStatus(e.target.value)}>{statuses.map(s => <option key={s}>{s}</option>)}</select>
-    {["Shipped", "Delivered"].includes(nextStatus) && <input aria-label="Tracking number" placeholder="Tracking number" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} />}
+    {["Shipped", "Delivered"].includes(nextStatus) && <input aria-label="ST Courier tracking number" placeholder="ST Courier tracking / consignment number" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} />}
     <button onClick={save}>Save status</button>
     {paymentMethod === "manual_upi" && (paymentStatus === "pending" || reservationExpired) && <div style={{ display: "grid", gap: 6 }}>
       {reservationExpired && <small>The 30-minute stock hold expired. Confirm stock is available before confirming payment; otherwise arrange a refund or replacement.</small>}

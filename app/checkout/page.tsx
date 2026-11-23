@@ -55,8 +55,14 @@ export default function CheckoutPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [submittedOrder, setSubmittedOrder] = useState("");
+  const [submittedOrderId, setSubmittedOrderId] = useState("");
+  const [guestAccessToken, setGuestAccessToken] = useState("");
   const [whatsappUrl, setWhatsappUrl] = useState("");
+  const [orderStatus, setOrderStatus] = useState("");
+  const [trackingNumber, setTrackingNumber] = useState<string | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingError, setTrackingError] = useState("");
+  const [trackingRefresh, setTrackingRefresh] = useState(0);
   const [returnedFromWhatsApp, setReturnedFromWhatsApp] = useState(false);
   const whatsappStartedRef = useRef(false);
   const leftPageRef = useRef(false);
@@ -74,6 +80,44 @@ export default function CheckoutPage() {
       setDelivery(settings);
     }).catch(() => setError("Delivery settings could not be loaded. Please refresh and try again."));
   }, []);
+
+  useEffect(() => {
+    if (!submittedOrderId) return;
+    let active = true;
+    let checking = false;
+    let trackingFound = false;
+
+    async function checkTracking() {
+      if (!active || checking || trackingFound) return;
+      checking = true;
+      setTrackingLoading(true);
+      setTrackingError("");
+      try {
+        const response = await fetch(`/api/orders/tracking?orderId=${encodeURIComponent(submittedOrderId)}`, {
+          cache: "no-store",
+          headers: guestAccessToken ? { Authorization: `Bearer ${guestAccessToken}` } : {},
+        });
+        const result = await response.json() as { orderStatus?: string; trackingNumber?: string | null; error?: string };
+        if (!response.ok || !result.orderStatus) throw new Error(result.error ?? "Unable to load tracking details.");
+        if (!active) return;
+        setOrderStatus(result.orderStatus);
+        setTrackingNumber(result.trackingNumber ?? null);
+        trackingFound = Boolean(result.trackingNumber);
+      } catch (e) {
+        if (active) setTrackingError(e instanceof Error ? e.message : "Unable to load tracking details.");
+      } finally {
+        checking = false;
+        if (active) setTrackingLoading(false);
+      }
+    }
+
+    void checkTracking();
+    const timer = window.setInterval(() => { void checkTracking(); }, 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [submittedOrderId, guestAccessToken, trackingRefresh]);
 
   useEffect(() => {
     localStorage.removeItem("lilsurpriz-customization");
@@ -175,11 +219,12 @@ export default function CheckoutPage() {
         try {
           rememberGuestOrder(result.orderId, result.orderNumber, result.accessToken);
         } catch {
-          setRecoveryWarning("Your request was saved, but this browser could not save its order link. Keep the order number shown below.");
+          setRecoveryWarning("Your request was saved, but this browser could not save guest tracking access. Keep the WhatsApp message and contact the store if you need help.");
         }
       }
       clear();
-      setSubmittedOrder(result.orderNumber);
+      setSubmittedOrderId(result.orderId);
+      setGuestAccessToken(result.accessToken ?? "");
       setWhatsappUrl(result.whatsappUrl);
       orderSavedRef.current = true;
       setMessage(returnedToPageRef.current
@@ -207,12 +252,16 @@ export default function CheckoutPage() {
     setAppliedCoupon({ code: result.code, discount: result.discount });
   }
 
-  if (submittedOrder) return <main className="section wrap" style={{ maxWidth: 700 }}>
+  if (submittedOrderId) return <main className="section wrap" style={{ maxWidth: 700 }}>
     <span className="eyebrow">{returnedFromWhatsApp ? "Order complete" : "Order request saved"}</span><h1 style={{ fontSize: 44 }}>{returnedFromWhatsApp ? "Ordered successfully ✅" : "Almost done"}</h1>
     <div className="notice success" role="status">{message}</div>
-    <p><b>Order number:</b> {submittedOrder}</p>
     <p className="muted">{returnedFromWhatsApp ? "If you sent the WhatsApp message, your order request is complete. Returning here cannot verify that WhatsApp delivered it. We’ll confirm availability and arrange payment with you directly; no payment has been taken." : "No payment has been taken. WhatsApp should open with your order details and private photo links. Tap Send there, then return here. Photo links expire after 7 days. Items are held for 30 minutes."}</p>
     {recoveryWarning && <p className="notice" role="status">{recoveryWarning}</p>}
+    <section className="summary" aria-live="polite">
+      <div className="section-head"><div><h2 style={{ fontSize: 22 }}>Track your order</h2><p className="muted">Order status: {orderStatus || "Checking…"}</p></div><button type="button" className="btn btn-light" disabled={trackingLoading} onClick={() => setTrackingRefresh(current => current + 1)}>{trackingLoading ? "Checking…" : "Refresh tracking"}</button></div>
+      {trackingNumber ? <p><b>ST Courier tracking number:</b> {trackingNumber}</p> : <p className="muted">The ST Courier tracking number will appear here after your order ships and the store adds it.</p>}
+      {trackingError && <p className="notice" role="alert">{trackingError}</p>}
+    </section>
     <a className="btn btn-pink" href={whatsappUrl} target="_blank" rel="noreferrer" onClick={() => { whatsappStartedRef.current = true; }}>{returnedFromWhatsApp ? "Open WhatsApp again" : "Open WhatsApp to send your order"}</a>
     <p style={{ marginTop: 20 }}><Link className="text-link" href="/shop">Continue shopping</Link></p>
   </main>;
