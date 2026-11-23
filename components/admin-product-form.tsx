@@ -8,7 +8,8 @@ import type { Category, Product } from "@/lib/types";
 type Props = { categories: Category[]; product?: Product };
 type ProductFormState = {
   name: string; sku: string; description: string; category_id: string; price: string; compare_at_price: string; stock: string;
-  features: string; hamper_items: string; size: string; weight_grams: string; available: boolean; featured: boolean; new_arrival: boolean;
+  features: string; hamper_items: string; size: string; weight_grams: string; customer_photo_mode: "none" | "optional" | "required"; customer_photo_limit: string;
+  available: boolean; featured: boolean; new_arrival: boolean;
 };
 
 async function optimizeImage(file: File) {
@@ -29,6 +30,7 @@ export function AdminProductForm({ categories, product }: Props) {
     name: product?.name ?? "", sku: product?.sku ?? "", description: product?.description ?? "", category_id: product?.category_id ?? "",
     price: String(product?.price ?? ""), compare_at_price: product?.compare_at_price ? String(product.compare_at_price) : "", stock: String(product?.stock ?? 0),
     features: (product?.features ?? []).join("\n"), hamper_items: (product?.hamper_items ?? []).join("\n"), size: product?.size ?? "", weight_grams: product?.weight_grams ? String(product.weight_grams) : "",
+    customer_photo_mode: product?.customer_photo_mode ?? "none", customer_photo_limit: String(product?.customer_photo_limit ?? 1),
     available: product?.available ?? true, featured: product?.featured ?? false, new_arrival: product?.new_arrival ?? false,
   });
   const [files, setFiles] = useState<File[]>([]);
@@ -49,6 +51,8 @@ export function AdminProductForm({ categories, product }: Props) {
     event.preventDefault(); setBusy(true); setError("");
     try {
       if (!form.name.trim() || !form.sku.trim() || Number(form.price) < 0 || !Number.isFinite(Number(form.price))) throw new Error("Enter a product name, SKU, and valid price.");
+      const customerPhotoLimit = Number(form.customer_photo_limit);
+      if (form.customer_photo_mode !== "none" && (!Number.isInteger(customerPhotoLimit) || customerPhotoLimit < 1 || customerPhotoLimit > 10)) throw new Error("Set a maximum of 1 to 10 customer photos.");
       const supabase = createClient();
       const imageUrls = [...images];
       for (const file of files) {
@@ -65,6 +69,7 @@ export function AdminProductForm({ categories, product }: Props) {
         price: Number(form.price), compare_at_price: form.compare_at_price ? Number(form.compare_at_price) : null, stock: Number(form.stock),
         features: form.features.split("\n").map(v => v.trim()).filter(Boolean), hamper_items: form.hamper_items.split("\n").map(v => v.trim()).filter(Boolean),
         size: form.size || null, weight_grams: form.weight_grams ? Number(form.weight_grams) : null,
+        customer_photo_mode: form.customer_photo_mode, customer_photo_limit: form.customer_photo_mode === "none" ? 1 : customerPhotoLimit,
         available: form.available, featured: form.featured, new_arrival: form.new_arrival, image_urls: imageUrls,
       };
       const response = await fetch("/api/admin/products", { method: product ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -88,6 +93,10 @@ export function AdminProductForm({ categories, product }: Props) {
     </div>
     <div className="field"><label>Description</label><textarea maxLength={10000} value={form.description} onChange={e => update("description", e.target.value)} /></div>
     <div className="form-grid"><div className="field"><label>Features (one per line)</label><textarea value={form.features} onChange={e => update("features", e.target.value)} /></div><div className="field"><label>Gift box items (one per line)</label><textarea value={form.hamper_items} onChange={e => update("hamper_items", e.target.value)} /></div></div>
+    <div className="form-grid">
+      <div className="field"><label>Customer photo upload</label><select value={form.customer_photo_mode} onChange={e => { const value = e.target.value; if (value === "none" || value === "optional" || value === "required") update("customer_photo_mode", value); }}><option value="none">Not needed</option><option value="optional">Optional</option><option value="required">Required</option></select><small className="muted">Controls whether customers see a photo upload field at checkout.</small></div>
+      {form.customer_photo_mode !== "none" && <div className="field"><label>Maximum customer photos</label><input type="number" min="1" max="10" step="1" required value={form.customer_photo_limit} onChange={e => update("customer_photo_limit", e.target.value)} /><small className="muted">If required, customers must add at least one photo. Photos apply to all units of this product in the order.</small></div>}
+    </div>
     <div className="field"><label>Product photos (up to 12, JPEG/PNG/WebP/AVIF, max 10 MB each)</label><input type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple onChange={e => chooseFiles(e.target.files)} /><small className="muted">Images are resized and optimized in your browser before secure upload.</small>
       <div className="file-preview">{images.map((url, i) => <div key={url} style={{ position: "relative" }}><img src={url} alt={`Product image ${i + 1}`} /><button type="button" aria-label="Remove image" onClick={() => setImages(images.filter((_, n) => n !== i))}>×</button></div>)}{previews.map((url, i) => <div key={url} style={{ position: "relative" }}><img src={url} alt={`New image ${i + 1}`} /><button type="button" aria-label="Remove image" onClick={() => { setFiles(files.filter((_, n) => n !== i)); setPreviews(previews.filter((_, n) => n !== i)); URL.revokeObjectURL(url); }}>×</button></div>)}</div>
     </div>

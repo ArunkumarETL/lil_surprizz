@@ -50,8 +50,8 @@ export default function CheckoutPage() {
   const [coupon, setCoupon] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null);
   const [delivery, setDelivery] = useState({ shipping_charge: 60, free_shipping_threshold: 999 });
-  const [photos, setPhotos] = useState<File[]>([]);
-  const [photoPreviews, setPhotoPreviews] = useState<{ name: string; url: string }[]>([]);
+  const [photos, setPhotos] = useState<Record<string, File[]>>({});
+  const [photoPreviews, setPhotoPreviews] = useState<Record<string, { name: string; url: string }[]>>({});
   const photoUrls = useRef<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -72,6 +72,8 @@ export default function CheckoutPage() {
   const orderSavedRef = useRef(false);
   const [recoveryWarning, setRecoveryWarning] = useState("");
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const photoProducts = items.filter(item => item.product.customer_photo_mode === "optional" || item.product.customer_photo_mode === "required");
+  const selectedPhotoCount = Object.values(photos).reduce((sum, productPhotos) => sum + productPhotos.length, 0);
   const shipping = Math.max(0, subtotal - (appliedCoupon?.discount ?? 0)) >= delivery.free_shipping_threshold ? 0 : delivery.shipping_charge;
   const estimatedTotal = Math.max(0, subtotal - (appliedCoupon?.discount ?? 0)) + shipping;
 
@@ -158,10 +160,18 @@ export default function CheckoutPage() {
     };
   }, []);
 
-  function addPhotos(files: FileList | null) {
+  function addPhotos(productId: string, files: FileList | null) {
     if (!files?.length) return;
     setError("");
     const selected = Array.from(files);
+    const product = items.find(item => item.product.id === productId)?.product;
+    if (!product || (product.customer_photo_mode !== "optional" && product.customer_photo_mode !== "required")) return;
+    const photoLimit = product.customer_photo_limit ?? 1;
+    const productPhotos = photos[productId] ?? [];
+    if (productPhotos.length + selected.length > photoLimit) {
+      setError(`Choose up to ${photoLimit} photos for ${product.name}.`);
+      return;
+    }
     if (selected.some(file => !acceptedPhotoTypes.includes(file.type))) {
       setError("Choose JPG, PNG, or WebP photos.");
       return;
@@ -170,8 +180,8 @@ export default function CheckoutPage() {
       setError("Each original photo must be smaller than 20 MB.");
       return;
     }
-    if (photos.length + selected.length > maxPhotos) {
-      setError(`You can add up to ${maxPhotos} photos.`);
+    if (selectedPhotoCount + selected.length > maxPhotos) {
+      setError(`You can add up to ${maxPhotos} photos across your order.`);
       return;
     }
     const newPreviews = selected.map(file => {
@@ -179,25 +189,34 @@ export default function CheckoutPage() {
       photoUrls.current.push(url);
       return { name: file.name, url };
     });
-    setPhotos(current => [...current, ...selected]);
-    setPhotoPreviews(current => [...current, ...newPreviews]);
+    setPhotos(current => ({ ...current, [productId]: [...(current[productId] ?? []), ...selected] }));
+    setPhotoPreviews(current => ({ ...current, [productId]: [...(current[productId] ?? []), ...newPreviews] }));
   }
 
-  function removePhoto(index: number) {
-    const [preview] = photoPreviews.slice(index, index + 1);
+  function removePhoto(productId: string, index: number) {
+    const [preview] = (photoPreviews[productId] ?? []).slice(index, index + 1);
     if (preview) {
       URL.revokeObjectURL(preview.url);
       photoUrls.current = photoUrls.current.filter(url => url !== preview.url);
     }
-    setPhotos(current => current.filter((_, photoIndex) => photoIndex !== index));
-    setPhotoPreviews(current => current.filter((_, photoIndex) => photoIndex !== index));
+    setPhotos(current => ({ ...current, [productId]: (current[productId] ?? []).filter((_, photoIndex) => photoIndex !== index) }));
+    setPhotoPreviews(current => ({ ...current, [productId]: (current[productId] ?? []).filter((_, photoIndex) => photoIndex !== index) }));
   }
 
   async function placeOrder(event: React.FormEvent) {
     event.preventDefault();
-    setBusy(true);
     setError("");
     setMessage("");
+    const missingPhotoProduct = photoProducts.find(item => item.product.customer_photo_mode === "required" && !(photos[item.product.id]?.length));
+    if (missingPhotoProduct) {
+      setError(`Add at least one photo for ${missingPhotoProduct.product.name}.`);
+      return;
+    }
+    if (selectedPhotoCount > maxPhotos) {
+      setError(`You can add up to ${maxPhotos} photos across your order.`);
+      return;
+    }
+    setBusy(true);
     const whatsappWindow = window.open("about:blank", "_blank");
     whatsappStartedRef.current = Boolean(whatsappWindow);
     if (whatsappWindow) whatsappWindow.opener = null;
@@ -208,8 +227,13 @@ export default function CheckoutPage() {
         ...form,
         coupon: coupon || undefined,
       }));
-      const optimizedPhotos = await Promise.all(photos.map(optimizePhoto));
-      for (const photo of optimizedPhotos) body.append("photos", photo);
+      const photoGroups = await Promise.all(photoProducts.map(async item => ({
+        productId: item.product.id,
+        photos: await Promise.all((photos[item.product.id] ?? []).map(optimizePhoto)),
+      })));
+      for (const group of photoGroups) {
+        for (const photo of group.photos) body.append(`photos:${group.productId}`, photo);
+      }
 
       const response = await fetch("/api/checkout", { method: "POST", body });
       const result = await response.json() as { whatsappUrl?: string; orderId?: string; orderNumber?: string; accessToken?: string; error?: string };
@@ -235,10 +259,10 @@ export default function CheckoutPage() {
         : "Your order request is saved. WhatsApp is opening with your order details and photo links. Tap Send there, then return here.");
       if (returnedToPageRef.current) setReturnedFromWhatsApp(true);
       if (whatsappWindow) whatsappWindow.location.href = result.whatsappUrl;
-      photoPreviews.forEach(photo => URL.revokeObjectURL(photo.url));
+      Object.values(photoPreviews).flat().forEach(photo => URL.revokeObjectURL(photo.url));
       photoUrls.current = [];
-      setPhotos([]);
-      setPhotoPreviews([]);
+      setPhotos({});
+      setPhotoPreviews({});
     } catch (e) {
       whatsappWindow?.close();
       setError(e instanceof Error ? e.message : "Unable to submit your order request.");
@@ -281,9 +305,20 @@ export default function CheckoutPage() {
       <div className="field"><label htmlFor="checkout-address">Address</label><textarea id="checkout-address" required maxLength={300} value={form.address} onChange={event => setForm({ ...form, address: event.target.value })} /></div>
       <div className="form-grid"><div className="field"><label htmlFor="checkout-city">City</label><input id="checkout-city" required maxLength={80} value={form.city} onChange={event => setForm({ ...form, city: event.target.value })} /></div><div className="field"><label htmlFor="checkout-state">State</label><input id="checkout-state" required maxLength={80} value={form.state} onChange={event => setForm({ ...form, state: event.target.value })} /></div></div>
       <div className="field"><label htmlFor="checkout-pincode">PIN code</label><input id="checkout-pincode" required inputMode="numeric" pattern="[0-9]{6}" value={form.pincode} onChange={event => setForm({ ...form, pincode: event.target.value })} /></div>
-      <div className="field"><label htmlFor="checkout-photos">Add multiple photos</label><input id="checkout-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={event => { addPhotos(event.target.files); event.currentTarget.value = ""; }} /><small className="muted">Select up to {maxPhotos} photos. We resize them and add private links to your WhatsApp message; links expire after 7 days.</small>
-        {photoPreviews.length > 0 && <div className="file-preview">{photoPreviews.map((photo, index) => <div key={photo.url} style={{ position: "relative" }}><img src={photo.url} alt={`Selected photo ${index + 1}: ${photo.name}`} /><button type="button" aria-label={`Remove ${photo.name}`} onClick={() => removePhoto(index)}>×</button></div>)}</div>}
-      </div>
+      {photoProducts.length > 0 && <section className="summary"><h2 style={{ fontSize: 20 }}>Photos for personalized products</h2><p className="muted">Upload photos only for the products below. Each product’s photos will be labeled in your WhatsApp order.</p>
+        {photoProducts.map(item => {
+          const productId = item.product.id;
+          const productPhotos = photoPreviews[productId] ?? [];
+          const required = item.product.customer_photo_mode === "required";
+          const photoLimit = item.product.customer_photo_limit ?? 1;
+          return <div className="field" key={productId}>
+            <label htmlFor={`checkout-photos-${productId}`}>{item.product.name} photos ({required ? "required" : "optional"})</label>
+            <input id={`checkout-photos-${productId}`} type="file" accept="image/jpeg,image/png,image/webp" multiple={photoLimit > 1} onChange={event => { addPhotos(productId, event.target.files); event.currentTarget.value = ""; }} />
+            <small className="muted">Up to {photoLimit} photos. They apply to all {item.quantity} unit{item.quantity === 1 ? "" : "s"} of this product. Each order allows up to {maxPhotos} photos total.</small>
+            {productPhotos.length > 0 && <div className="file-preview">{productPhotos.map((photo, index) => <div key={photo.url} style={{ position: "relative" }}><img src={photo.url} alt={`${item.product.name} photo ${index + 1}: ${photo.name}`} /><button type="button" aria-label={`Remove ${photo.name} for ${item.product.name}`} onClick={() => removePhoto(productId, index)}>×</button></div>)}</div>}
+          </div>;
+        })}
+      </section>}
       <div className="field"><label htmlFor="checkout-coupon">Coupon code (optional)</label><div style={{ display: "flex", gap: 8 }}><input id="checkout-coupon" value={coupon} onChange={event => { setCoupon(event.target.value.toUpperCase()); setAppliedCoupon(null); }} /><button type="button" className="btn btn-light" onClick={applyCoupon}>Apply</button></div>{appliedCoupon && <small className="muted">{appliedCoupon.code} applied.</small>}</div>
       <div className="summary"><h2 style={{ fontSize: 20 }}>Send your order request</h2><p className="muted">After saving your request, WhatsApp opens with the order details and photo links. Review them and tap Send. We’ll confirm availability and arrange payment with you directly; no payment is taken here. Items are held for 30 minutes.</p></div>
       {error && <div className="notice" role="alert">{error}</div>}

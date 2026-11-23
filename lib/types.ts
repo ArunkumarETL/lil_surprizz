@@ -23,6 +23,8 @@ export type Product = {
   hamper_items: string[];
   size: string | null;
   weight_grams: number | null;
+  customer_photo_mode: "none" | "optional" | "required";
+  customer_photo_limit: number;
   available: boolean;
   featured: boolean;
   new_arrival: boolean;

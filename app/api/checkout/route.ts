@@ -47,15 +47,26 @@ export async function POST(request: Request) {
   const parsed = requestSchema.safeParse(rawOrder);
   if (!parsed.success) return Response.json({ error: "Please check your delivery details and selected items." }, { status: 400 });
 
-  const photoEntries = formData.getAll("photos");
-  if (photoEntries.length > maxPhotos || photoEntries.some(entry => typeof entry === "string")) {
-    return Response.json({ error: `Choose up to ${maxPhotos} valid photos.` }, { status: 400 });
+  const photosByProduct = new Map<string, File[]>();
+  let photoCount = 0;
+  let photoBytes = 0;
+  for (const [field, entry] of formData.entries()) {
+    if (field === "order") continue;
+    const match = /^photos:([0-9a-f-]{36})$/i.exec(field);
+    if (!match || typeof entry === "string") {
+      return Response.json({ error: "Invalid product photo upload." }, { status: 400 });
+    }
+    const photos = photosByProduct.get(match[1]) ?? [];
+    photos.push(entry);
+    photosByProduct.set(match[1], photos);
+    photoCount += 1;
+    photoBytes += entry.size;
+    if (photoCount > maxPhotos) return Response.json({ error: `Choose up to ${maxPhotos} photos across your order.` }, { status: 400 });
+    if (!photoTypes[entry.type] || entry.size <= 0 || entry.size > maxPhotoBytes) {
+      return Response.json({ error: "Each photo must be a JPG, PNG, or WebP under 350 KB after resizing." }, { status: 400 });
+    }
   }
-  const photos = photoEntries as File[];
-  if (photos.some(photo => !photoTypes[photo.type] || photo.size <= 0 || photo.size > maxPhotoBytes)) {
-    return Response.json({ error: "Each photo must be a JPG, PNG, or WebP under 350 KB after resizing." }, { status: 400 });
-  }
-  if (photos.reduce((sum, photo) => sum + photo.size, 0) > maxPhotos * maxPhotoBytes) {
+  if (photoBytes > maxPhotos * maxPhotoBytes) {
     return Response.json({ error: "The selected photos are too large. Please remove a photo and try again." }, { status: 400 });
   }
 
@@ -64,15 +75,30 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const requested = parsed.data.items;
   const productIds = [...new Set(requested.map(item => item.productId))];
-  const { data: products, error: productError } = await admin.from("products").select("id,name,sku,price,stock,available,archived").in("id", productIds);
+  const { data: products, error: productError } = await admin.from("products")
+    .select("id,name,sku,price,stock,available,archived,customer_photo_mode,customer_photo_limit").in("id", productIds);
   if (productError) return Response.json({ error: "Unable to verify product availability." }, { status: 500 });
   const productMap = new Map((products ?? []).map(product => [product.id, product]));
+  const requestedProductIds = new Set(requested.map(item => item.productId));
+  if ([...photosByProduct.keys()].some(productId => !requestedProductIds.has(productId))) {
+    return Response.json({ error: "Photos were submitted for an item that is not in this order." }, { status: 400 });
+  }
   const orderLines = [];
   let subtotal = 0;
   for (const item of requested) {
     const product = productMap.get(item.productId);
     if (!product || !product.available || product.archived) return Response.json({ error: "One of your selected gifts is no longer available." }, { status: 409 });
     if (product.stock < item.quantity) return Response.json({ error: `${product.name} has only ${product.stock} left.` }, { status: 409 });
+    const productPhotoCount = photosByProduct.get(product.id)?.length ?? 0;
+    if (product.customer_photo_mode === "none" && productPhotoCount > 0) {
+      return Response.json({ error: `${product.name} does not accept customer photos.` }, { status: 400 });
+    }
+    if (product.customer_photo_mode === "required" && productPhotoCount === 0) {
+      return Response.json({ error: `Add at least one photo for ${product.name}.` }, { status: 400 });
+    }
+    if (productPhotoCount > product.customer_photo_limit) {
+      return Response.json({ error: `Choose up to ${product.customer_photo_limit} photos for ${product.name}.` }, { status: 400 });
+    }
     const unitPrice = Number(product.price);
     subtotal += unitPrice * item.quantity;
     orderLines.push({ product_id: product.id, product_name: product.name, sku: product.sku, quantity: item.quantity, unit_price: unitPrice });
@@ -107,38 +133,52 @@ export async function POST(request: Request) {
   const orderNumber = `LS-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
   const guestAccess = user ? null : createGuestOrderAccessToken();
   const uploadedPaths: string[] = [];
-  for (const photo of photos) {
-    const extension = photoTypes[photo.type];
-    const path = `orders/${orderNumber}/${crypto.randomUUID()}.${extension}`;
-    const { error } = await admin.storage.from(photoBucket).upload(path, await photo.arrayBuffer(), {
-      contentType: photo.type,
-      cacheControl: "3600",
-      upsert: false,
-    });
-    if (error) {
-      await removeCustomerPhotos(admin, uploadedPaths);
-      console.error("Unable to upload customer order photo", error.message);
-      const storageError = error.message.toLowerCase();
-      const uploadMessage = /row-level security|permission denied|unauthorized|forbidden|invalid jwt|invalid api key/.test(storageError)
-        ? "Photo upload permissions are not configured on the store server. Please contact the store."
-        : /bucket.*not found|not found.*bucket/.test(storageError)
-          ? "Photo storage is not configured for this website yet. Please contact the store."
-          : "Unable to save your photos. Please try again or contact the store.";
-      return Response.json({ error: uploadMessage }, { status: 503 });
+  const uploadedPathsByProduct = new Map<string, string[]>();
+  for (const line of orderLines) {
+    const photos = photosByProduct.get(line.product_id) ?? [];
+    for (const photo of photos) {
+      const extension = photoTypes[photo.type];
+      const path = `orders/${orderNumber}/${line.product_id}/${crypto.randomUUID()}.${extension}`;
+      const { error } = await admin.storage.from(photoBucket).upload(path, await photo.arrayBuffer(), {
+        contentType: photo.type,
+        cacheControl: "3600",
+        upsert: false,
+      });
+      if (error) {
+        await removeCustomerPhotos(admin, uploadedPaths);
+        console.error("Unable to upload customer order photo", error.message);
+        const storageError = error.message.toLowerCase();
+        const uploadMessage = /row-level security|permission denied|unauthorized|forbidden|invalid jwt|invalid api key/.test(storageError)
+          ? "Photo upload permissions are not configured on the store server. Please contact the store."
+          : /bucket.*not found|not found.*bucket/.test(storageError)
+            ? "Photo storage is not configured for this website yet. Please contact the store."
+            : "Unable to save your photos. Please try again or contact the store.";
+        return Response.json({ error: uploadMessage }, { status: 503 });
+      }
+      uploadedPaths.push(path);
+      uploadedPathsByProduct.set(line.product_id, [...(uploadedPathsByProduct.get(line.product_id) ?? []), path]);
     }
-    uploadedPaths.push(path);
   }
 
-  const signedPhotoUrls: string[] = [];
-  for (const path of uploadedPaths) {
-    const { data, error } = await admin.storage.from(photoBucket).createSignedUrl(path, 60 * 60 * 24 * 7);
-    if (error || !data?.signedUrl) {
-      await removeCustomerPhotos(admin, uploadedPaths);
-      console.error("Unable to create secure link for customer order photo", error?.message ?? "Missing signed URL.");
-      return Response.json({ error: "Unable to prepare your photos for WhatsApp. Please try again." }, { status: 503 });
+  const signedPhotosByProduct = new Map<string, string[]>();
+  for (const line of orderLines) {
+    const paths = uploadedPathsByProduct.get(line.product_id) ?? [];
+    const signedUrls: string[] = [];
+    for (const path of paths) {
+      const { data, error } = await admin.storage.from(photoBucket).createSignedUrl(path, 60 * 60 * 24 * 7);
+      if (error || !data?.signedUrl) {
+        await removeCustomerPhotos(admin, uploadedPaths);
+        console.error("Unable to create secure link for customer order photo", error?.message ?? "Missing signed URL.");
+        return Response.json({ error: "Unable to prepare your photos for WhatsApp. Please try again." }, { status: 503 });
+      }
+      signedUrls.push(data.signedUrl);
     }
-    signedPhotoUrls.push(data.signedUrl);
+    if (signedUrls.length) signedPhotosByProduct.set(line.product_id, signedUrls);
   }
+  const customerPhotoGroups = orderLines.flatMap(line => {
+    const paths = uploadedPathsByProduct.get(line.product_id) ?? [];
+    return paths.length ? [{ product_id: line.product_id, product_name: line.product_name, paths }] : [];
+  });
 
   const { data: orderId, error: orderError } = await admin.rpc("create_manual_upi_order", {
     p_customer_id: user?.id ?? null,
@@ -151,6 +191,7 @@ export async function POST(request: Request) {
     p_payment_details: {
       payment_flow: "whatsapp",
       customer_photo_paths: uploadedPaths,
+      customer_photo_groups: customerPhotoGroups,
       ...(guestAccess ? { guest_access_token_hash: guestAccess.tokenHash } : {}),
     },
     p_shipping_address: { name: parsed.data.name, phone: parsed.data.phone, email: parsed.data.email || null, address: parsed.data.address, city: parsed.data.city, state: parsed.data.state, pincode: parsed.data.pincode },
@@ -178,6 +219,10 @@ export async function POST(request: Request) {
 
   const itemSummary = orderLines.map(line => `${line.quantity} × ${messageText(line.product_name)} (₹${(line.unit_price * line.quantity).toLocaleString("en-IN")})`).join("\n");
   const address = [parsed.data.address, parsed.data.city, parsed.data.state, parsed.data.pincode].map(messageText).join(", ");
+  const customerPhotoMessages = orderLines.flatMap(line => {
+    const urls = signedPhotosByProduct.get(line.product_id) ?? [];
+    return urls.length ? [`Customer photos for ${messageText(line.product_name)}:\n${urls.join("\n")}`] : [];
+  });
   const orderMessageLines = [
     `Hi LILSURPRIZ, I'd like to place order request ${orderNumber}.`,
     `Name: ${messageText(parsed.data.name)}`,
@@ -189,7 +234,7 @@ export async function POST(request: Request) {
     `Delivery: ${shipping ? `₹${shipping.toLocaleString("en-IN")}` : "Free"}`,
     ...(discount ? [`Discount${couponCode ? ` (${couponCode})` : ""}: ₹${discount.toLocaleString("en-IN")}`] : []),
     `Estimated total: ₹${total.toLocaleString("en-IN")}`,
-    ...(signedPhotoUrls.length ? [`Customer photos:\n${signedPhotoUrls.join("\n")}`] : []),
+    ...customerPhotoMessages,
     "Please confirm availability and share payment instructions. Items are held for 30 minutes. I have not paid yet.",
   ];
   const message = orderMessageLines.join("\n");

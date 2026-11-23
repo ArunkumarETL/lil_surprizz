@@ -22,6 +22,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     <div className="details"><h1 style={{ fontSize: 40, margin: "10px 0" }}>{product.name}</h1>
       <div className="price">₹{product.price.toLocaleString("en-IN")}{product.compare_at_price && product.compare_at_price > product.price ? <span className="old-price">₹{product.compare_at_price.toLocaleString("en-IN")}</span> : null}</div>
       <p style={{ marginTop: 18 }}>{product.description}</p>
+      {product.customer_photo_mode === "required" && <p className="notice">At least one customer photo is required at checkout (up to {product.customer_photo_limit}).</p>}
+      {product.customer_photo_mode === "optional" && <p className="muted">You can add up to {product.customer_photo_limit} customer photo{product.customer_photo_limit === 1 ? "" : "s"} at checkout.</p>}
       {product.hamper_items.length > 0 && <><h3>Inside your box</h3><ul>{product.hamper_items.map(item => <li key={item}>{item}</li>)}</ul></>}
       {product.features.length > 0 && <ul>{product.features.map(item => <li key={item}>{item}</li>)}</ul>}
       <ProductActions product={product} />

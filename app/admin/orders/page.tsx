@@ -25,10 +25,27 @@ function readCustomOrderDetails(value: unknown): CustomOrderDetails | null {
   return Object.values(parsed).some(Boolean) ? parsed : null;
 }
 
-function readCustomerPhotoPaths(value: unknown) {
+function readCustomerPhotoGroups(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-  const paths = (value as Record<string, unknown>).customer_photo_paths;
-  return Array.isArray(paths) ? paths.filter((path): path is string => typeof path === "string" && path.startsWith("orders/")) : [];
+  const details = value as Record<string, unknown>;
+  const groups = Array.isArray(details.customer_photo_groups)
+    ? details.customer_photo_groups.flatMap(group => {
+      if (!group || typeof group !== "object" || Array.isArray(group)) return [];
+      const entry = group as Record<string, unknown>;
+      const paths = Array.isArray(entry.paths) ? entry.paths.filter((path): path is string => typeof path === "string" && path.startsWith("orders/")) : [];
+      if (!paths.length) return [];
+      return [{
+        productId: typeof entry.product_id === "string" ? entry.product_id : null,
+        productName: typeof entry.product_name === "string" ? entry.product_name : null,
+        paths,
+      }];
+    })
+    : [];
+  if (groups.length) return groups;
+  const paths = Array.isArray(details.customer_photo_paths)
+    ? details.customer_photo_paths.filter((path): path is string => typeof path === "string" && path.startsWith("orders/"))
+    : [];
+  return paths.length ? [{ productId: null, productName: null, paths }] : [];
 }
 
 export default async function AdminOrdersPage() {
@@ -39,14 +56,21 @@ export default async function AdminOrdersPage() {
   const { data, error } = await db.from("orders").select("*, customers(full_name,email,phone), order_items(product_name,quantity,unit_price)").order("created_at", { ascending: false });
   if (error) throw new Error(`Unable to load orders: ${error.message}`);
   const orders = await Promise.all((data ?? []).map(async order => {
-    const photoPaths = readCustomerPhotoPaths(order.payment_details);
-    if (!photoPaths.length) return { order, photoUrls: [] as string[] };
+    const photoGroups = readCustomerPhotoGroups(order.payment_details);
+    const photoPaths = photoGroups.flatMap(group => group.paths);
+    if (!photoPaths.length) return { order, photoGroups: [] as { productId: string | null; productName: string | null; photoUrls: string[] }[] };
     const { data: photos, error: photosError } = await db.storage.from("customer-order-photos").createSignedUrls(photoPaths, 60 * 60);
     const photoUrls = photos?.flatMap(photo => typeof photo.signedUrl === "string" ? [photo.signedUrl] : []) ?? [];
     if (photosError || photoUrls.length !== photoPaths.length) throw new Error(`Unable to load customer photos for order ${order.order_number}.`);
-    return { order, photoUrls };
+    let offset = 0;
+    const signedPhotoGroups = photoGroups.map(group => {
+      const urls = photoUrls.slice(offset, offset + group.paths.length);
+      offset += group.paths.length;
+      return { productId: group.productId, productName: group.productName, photoUrls: urls };
+    });
+    return { order, photoGroups: signedPhotoGroups };
   }));
-  return <><span className="eyebrow">From their door to yours</span><h1 style={{ fontSize: 38 }}>Orders</h1><div className="table-scroll"><table className="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Status & tracking</th></tr></thead><tbody>{orders.map(({ order, photoUrls }) => {
+  return <><span className="eyebrow">From their door to yours</span><h1 style={{ fontSize: 38 }}>Orders</h1><div className="table-scroll"><table className="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Status & tracking</th></tr></thead><tbody>{orders.map(({ order, photoGroups }) => {
     const address = order.shipping_address as { name?: string; phone?: string; email?: string } | null;
     const custom = readCustomOrderDetails(order.custom_details);
     const whatsappOrder = (order.payment_details as { payment_flow?: unknown } | null)?.payment_flow === "whatsapp";
@@ -56,7 +80,7 @@ export default async function AdminOrdersPage() {
       <td>{order.customers?.full_name || address?.name || "—"}<br />{order.customers?.email || address?.email}<br />{order.customers?.phone || address?.phone}</td>
       <td>
         {order.order_items.map((i: { product_name: string; quantity: number }) => `${i.product_name} ×${i.quantity}`).join(", ")}
-        {photoUrls.length > 0 && <div><small>Customer photos: {photoUrls.map((url, index) => <span key={url}><a href={url} target="_blank" rel="noreferrer">Photo {index + 1}</a>{index < photoUrls.length - 1 ? " · " : ""}</span>)}</small></div>}
+        {photoGroups.map(group => <div key={group.productId ?? "order"}><small>{group.productName ? `Customer photos for ${group.productName}: ` : "Customer photos: "}{group.photoUrls.map((url, index) => <span key={url}><a href={url} target="_blank" rel="noreferrer">Photo {index + 1}</a>{index < group.photoUrls.length - 1 ? " · " : ""}</span>)}</small></div>)}
         {custom && <details><summary>Custom gift details</summary><dl>
           {custom.recipient && <div><dt>Recipient</dt><dd>{custom.recipient}</dd></div>}
           {custom.occasion && <div><dt>Occasion</dt><dd>{custom.occasion}</dd></div>}

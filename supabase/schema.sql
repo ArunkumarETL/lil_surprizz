@@ -46,6 +46,8 @@ create table if not exists public.products (
   hamper_items text[] not null default '{}',
   size text,
   weight_grams integer check (weight_grams is null or weight_grams >= 0),
+  customer_photo_mode text not null default 'none' check (customer_photo_mode in ('none', 'optional', 'required')),
+  customer_photo_limit smallint not null default 1 check (customer_photo_limit between 1 and 10),
   available boolean not null default true,
   featured boolean not null default false,
   new_arrival boolean not null default false,
@@ -54,6 +56,10 @@ create table if not exists public.products (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table public.products add column if not exists customer_photo_mode text not null default 'optional' check (customer_photo_mode in ('none', 'optional', 'required'));
+alter table public.products alter column customer_photo_mode set default 'none';
+alter table public.products add column if not exists customer_photo_limit smallint not null default 10 check (customer_photo_limit between 1 and 10);
+alter table public.products alter column customer_photo_limit set default 1;
 create index if not exists products_category_idx on public.products(category_id);
 create index if not exists products_listing_idx on public.products(available, archived, featured);
 

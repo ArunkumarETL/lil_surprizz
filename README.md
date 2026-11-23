@@ -14,7 +14,7 @@ Mobile-first ecommerce application built with Next.js and Supabase.
 
 - Product, category, stock, price, image, and settings management is backed by Supabase.
 - Product and logo images are stored in the `product-images` Storage bucket. Product images are resized to a 1600px maximum dimension and WebP-encoded in the browser.
-- Orders are re-priced and stock-checked on the server. Customers can submit an order request as guests with delivery details and optional product photos. Checkout does not take payment; customers review and send the prepared order details in WhatsApp, and the store arranges payment directly. Admins manage fulfillment and ST Courier tracking numbers manually.
+- Orders are re-priced and stock-checked on the server. Admins choose whether each product needs optional or required customer photos and set a per-product photo limit; checkout only asks for photos on configured products and labels them in WhatsApp. Checkout does not take payment; customers review and send the prepared order details in WhatsApp, and the store arranges payment directly. Admins manage fulfillment and ST Courier tracking numbers manually.
 - Existing Cashfree orders can still be reconciled through the payment webhook; Cashfree is no longer offered for new checkout orders.
 - Customers may sign in to view account features, but checkout does not require an account. Admin checks use the trusted JWT `app_metadata.role` claim and are repeated for each admin API request.
 
@@ -22,6 +22,7 @@ Mobile-first ecommerce application built with Next.js and Supabase.
 
 - Configure production Supabase credentials in Vercel environment variables.
 - For an existing Supabase project, apply [`supabase/migrations/20261123130000_whatsapp_order_photos.sql`](./supabase/migrations/20261123130000_whatsapp_order_photos.sql) before enabling customer photo uploads.
+- Apply [`supabase/migrations/20261123140000_product_customer_photo_upload_rules.sql`](./supabase/migrations/20261123140000_product_customer_photo_upload_rules.sql) to an existing project before using the per-product photo settings. Existing products keep optional photo uploads; new products default to no customer photo upload.
 - Apply [`supabase/migrations/20261123131000_set_whatsapp_order_number.sql`](./supabase/migrations/20261123131000_set_whatsapp_order_number.sql) and [`supabase/migrations/20261123132500_allow_whatsapp_order_requests.sql`](./supabase/migrations/20261123132500_allow_whatsapp_order_requests.sql) to configure the WhatsApp destination and allow WhatsApp orders without a payment reference.
 - Apply [`supabase/migrations/20261116100000_guest_checkout.sql`](./supabase/migrations/20261116100000_guest_checkout.sql) to an existing project to allow guest-created orders.
 - Set `NEXT_PUBLIC_SITE_URL` to the canonical HTTPS deployment URL.
